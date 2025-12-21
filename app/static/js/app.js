@@ -6,10 +6,14 @@
 let lastMessageCount = 0;
 let autoRefreshInterval = null;
 let isUserScrolling = false;
+let currentArchiveDate = null;  // Current selected archive date (null = live)
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     console.log('mc-webui initialized');
+
+    // Load archive list
+    loadArchiveList();
 
     // Load initial messages
     loadMessages();
@@ -55,6 +59,12 @@ function setupEventListeners() {
         loadMessages();
     });
 
+    // Date selector (archive selection)
+    document.getElementById('dateSelector').addEventListener('change', function(e) {
+        currentArchiveDate = e.target.value || null;
+        loadMessages();
+    });
+
     // Cleanup contacts button
     document.getElementById('cleanupBtn').addEventListener('click', function() {
         cleanupContacts();
@@ -79,7 +89,18 @@ function setupEventListeners() {
  */
 async function loadMessages() {
     try {
-        const response = await fetch('/api/messages?limit=100');
+        // Build URL with appropriate parameters
+        let url = '/api/messages?limit=500';
+
+        if (currentArchiveDate) {
+            // Loading archive
+            url += `&archive_date=${currentArchiveDate}`;
+        } else {
+            // Loading live messages - show last 7 days only
+            url += '&days=7';
+        }
+
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.success) {
@@ -354,6 +375,13 @@ function scrollToBottom() {
  */
 function formatTime(timestamp) {
     const date = new Date(timestamp * 1000);
+
+    // When viewing archive, always show full date + time
+    if (currentArchiveDate) {
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // When viewing live messages, use relative time
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
 
@@ -391,6 +419,47 @@ function updateCharCounter() {
         counter.classList.remove('text-warning', 'text-danger', 'fw-bold');
         counter.classList.add('text-muted');
     }
+}
+
+/**
+ * Load list of available archives
+ */
+async function loadArchiveList() {
+    try {
+        const response = await fetch('/api/archives');
+        const data = await response.json();
+
+        if (data.success) {
+            populateDateSelector(data.archives);
+        } else {
+            console.error('Error loading archives:', data.error);
+        }
+    } catch (error) {
+        console.error('Error loading archive list:', error);
+    }
+}
+
+/**
+ * Populate the date selector dropdown with archive dates
+ */
+function populateDateSelector(archives) {
+    const selector = document.getElementById('dateSelector');
+
+    // Keep the "Today (Live)" option
+    // Remove all other options
+    while (selector.options.length > 1) {
+        selector.remove(1);
+    }
+
+    // Add archive dates
+    archives.forEach(archive => {
+        const option = document.createElement('option');
+        option.value = archive.date;
+        option.textContent = `${archive.date} (${archive.message_count} msgs)`;
+        selector.appendChild(option);
+    });
+
+    console.log(`Loaded ${archives.length} archives`);
 }
 
 /**

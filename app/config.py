@@ -18,6 +18,11 @@ class Config:
     MC_REFRESH_INTERVAL = int(os.getenv('MC_REFRESH_INTERVAL', '60'))
     MC_INACTIVE_HOURS = int(os.getenv('MC_INACTIVE_HOURS', '48'))
 
+    # Archive configuration
+    MC_ARCHIVE_DIR = os.getenv('MC_ARCHIVE_DIR', '/root/.archive/meshcore')
+    MC_ARCHIVE_ENABLED = os.getenv('MC_ARCHIVE_ENABLED', 'true').lower() == 'true'
+    MC_ARCHIVE_RETENTION_DAYS = int(os.getenv('MC_ARCHIVE_RETENTION_DAYS', '7'))
+
     # Flask server configuration
     FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
     FLASK_PORT = int(os.getenv('FLASK_PORT', '5000'))
@@ -33,6 +38,11 @@ class Config:
     def meshcli_command(self) -> list:
         """Get the base meshcli command with serial port"""
         return ['meshcli', '-s', self.MC_SERIAL_PORT]
+
+    @property
+    def archive_dir_path(self) -> Path:
+        """Get the full path to archive directory"""
+        return Path(self.MC_ARCHIVE_DIR)
 
     def __repr__(self):
         return (

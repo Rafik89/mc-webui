@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.config import config
 
 logger = logging.getLogger(__name__)
@@ -69,17 +69,23 @@ def parse_message(line: Dict) -> Optional[Dict]:
     }
 
 
-def read_messages(limit: Optional[int] = None, offset: int = 0) -> List[Dict]:
+def read_messages(limit: Optional[int] = None, offset: int = 0, archive_date: Optional[str] = None, days: Optional[int] = None) -> List[Dict]:
     """
-    Read and parse messages from .msgs file.
+    Read and parse messages from .msgs file or archive file.
 
     Args:
         limit: Maximum number of messages to return (None = all)
         offset: Number of messages to skip from the end
+        archive_date: If provided, read from archive file for this date (YYYY-MM-DD)
+        days: If provided, filter messages from the last N days (only for live .msgs)
 
     Returns:
         List of parsed message dictionaries, sorted by timestamp (oldest first)
     """
+    # If archive_date is provided, read from archive
+    if archive_date:
+        return read_archive_messages(archive_date, limit, offset)
+
     msgs_file = config.msgs_file_path
 
     if not msgs_file.exists():
@@ -117,6 +123,10 @@ def read_messages(limit: Optional[int] = None, offset: int = 0) -> List[Dict]:
     # Sort by timestamp (oldest first)
     messages.sort(key=lambda m: m['timestamp'])
 
+    # Filter by days if specified
+    if days is not None and days > 0:
+        messages = filter_messages_by_days(messages, days)
+
     # Apply offset and limit
     if offset > 0:
         messages = messages[:-offset] if offset < len(messages) else []
@@ -147,3 +157,90 @@ def count_messages() -> int:
         Message count
     """
     return len(read_messages())
+
+
+def read_archive_messages(archive_date: str, limit: Optional[int] = None, offset: int = 0) -> List[Dict]:
+    """
+    Read messages from an archive file.
+
+    Args:
+        archive_date: Archive date in YYYY-MM-DD format
+        limit: Maximum number of messages to return (None = all)
+        offset: Number of messages to skip from the end
+
+    Returns:
+        List of parsed message dictionaries, sorted by timestamp (oldest first)
+    """
+    from app.archiver.manager import get_archive_path
+
+    archive_file = get_archive_path(archive_date)
+
+    if not archive_file.exists():
+        logger.warning(f"Archive file not found: {archive_file}")
+        return []
+
+    messages = []
+
+    try:
+        with open(archive_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    data = json.loads(line)
+                    parsed = parse_message(data)
+                    if parsed:
+                        messages.append(parsed)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON at line {line_num} in archive: {e}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error parsing line {line_num} in archive: {e}")
+                    continue
+
+    except FileNotFoundError:
+        logger.error(f"Archive file not found: {archive_file}")
+        return []
+    except Exception as e:
+        logger.error(f"Error reading archive file: {e}")
+        return []
+
+    # Sort by timestamp (oldest first)
+    messages.sort(key=lambda m: m['timestamp'])
+
+    # Apply offset and limit
+    if offset > 0:
+        messages = messages[:-offset] if offset < len(messages) else []
+
+    if limit is not None and limit > 0:
+        messages = messages[-limit:]
+
+    logger.info(f"Loaded {len(messages)} messages from archive {archive_date}")
+    return messages
+
+
+def filter_messages_by_days(messages: List[Dict], days: int) -> List[Dict]:
+    """
+    Filter messages to include only those from the last N days.
+
+    Args:
+        messages: List of message dicts
+        days: Number of days to include (from now)
+
+    Returns:
+        Filtered list of messages
+    """
+    if not messages:
+        return []
+
+    # Calculate cutoff timestamp
+    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_timestamp = cutoff_date.timestamp()
+
+    # Filter messages
+    filtered = [msg for msg in messages if msg['timestamp'] >= cutoff_timestamp]
+
+    logger.info(f"Filtered {len(filtered)} messages from last {days} days (out of {len(messages)} total)")
+    return filtered

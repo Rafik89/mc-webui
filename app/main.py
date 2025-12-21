@@ -7,6 +7,7 @@ from flask import Flask
 from app.config import config
 from app.routes.views import views_bp
 from app.routes.api import api_bp
+from app.archiver.manager import schedule_daily_archiving
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +29,13 @@ def create_app():
     # Register blueprints
     app.register_blueprint(views_bp)
     app.register_blueprint(api_bp)
+
+    # Initialize archive scheduler if enabled
+    if config.MC_ARCHIVE_ENABLED:
+        schedule_daily_archiving()
+        logger.info(f"Archive scheduler enabled - directory: {config.MC_ARCHIVE_DIR}")
+    else:
+        logger.info("Archive scheduler disabled")
 
     logger.info(f"mc-webui started - device: {config.MC_DEVICE_NAME}")
     logger.info(f"Messages file: {config.msgs_file_path}")

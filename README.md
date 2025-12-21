@@ -6,12 +6,13 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 
 **mc-webui** is a Flask-based web application that wraps `meshcore-cli`, eliminating the need for SSH/terminal access when using MeshCore chat on a Heltec V4 device connected to a Debian VM.
 
-### Key Features (MVP)
+### Key Features
 
 - 📱 **View messages** - Display chat history from Public channel with auto-refresh
-- ✉️ **Send messages** - Publish to Public channel
+- ✉️ **Send messages** - Publish to Public channel (200 char limit for LoRa)
 - 💬 **Reply to users** - Quick reply with `@[UserName]` format
 - 🧹 **Clean contacts** - Remove inactive contacts with configurable threshold
+- 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 
 ## Tech Stack
 
@@ -76,6 +77,9 @@ All configuration is done via environment variables in the `.env` file:
 | `MC_CONFIG_DIR` | meshcore configuration directory | `/root/.config/meshcore` |
 | `MC_REFRESH_INTERVAL` | Auto-refresh interval (seconds) | `60` |
 | `MC_INACTIVE_HOURS` | Inactivity threshold for cleanup | `48` |
+| `MC_ARCHIVE_DIR` | Archive directory path | `/mnt/archive/meshcore` |
+| `MC_ARCHIVE_ENABLED` | Enable automatic archiving | `true` |
+| `MC_ARCHIVE_RETENTION_DAYS` | Days to show in live view | `7` |
 | `FLASK_HOST` | Listen address | `0.0.0.0` |
 | `FLASK_PORT` | Application port | `5000` |
 | `FLASK_DEBUG` | Debug mode | `false` |
@@ -137,6 +141,18 @@ See [PRD.md](PRD.md) for detailed requirements and implementation plan.
 ### Viewing Messages
 
 The main page displays chat history from the Public channel (channel 0). Messages auto-refresh every 60 seconds by default.
+
+By default, the live view shows messages from the last 7 days. Older messages are automatically archived and can be accessed via the date selector.
+
+### Viewing Message Archives
+
+Access historical messages using the date selector in the navbar:
+
+1. Click the date dropdown in the navbar (next to Refresh button)
+2. Select a date to view archived messages for that day
+3. Select "Today (Live)" to return to live view
+
+Archives are created automatically at midnight (00:00 UTC) each day. The live view always shows the most recent messages (last 7 days by default).
 
 ### Sending Messages
 

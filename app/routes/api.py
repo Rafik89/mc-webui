@@ -3,9 +3,11 @@ REST API endpoints for mc-webui
 """
 
 import logging
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from app.meshcore import cli, parser
 from app.config import config
+from app.archiver import manager as archive_manager
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +17,13 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 @api_bp.route('/messages', methods=['GET'])
 def get_messages():
     """
-    Get list of messages from Public channel.
+    Get list of messages from Public channel or archive.
 
     Query parameters:
         limit (int): Maximum number of messages to return
         offset (int): Number of messages to skip from the end
+        archive_date (str): View archive for specific date (YYYY-MM-DD format)
+        days (int): Show only messages from last N days (live view only)
 
     Returns:
         JSON with messages list
@@ -27,13 +31,32 @@ def get_messages():
     try:
         limit = request.args.get('limit', type=int)
         offset = request.args.get('offset', default=0, type=int)
+        archive_date = request.args.get('archive_date', type=str)
+        days = request.args.get('days', type=int)
 
-        messages = parser.read_messages(limit=limit, offset=offset)
+        # Validate archive_date format if provided
+        if archive_date:
+            try:
+                datetime.strptime(archive_date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid date format: {archive_date}. Expected YYYY-MM-DD'
+                }), 400
+
+        # Read messages (from archive or live .msgs file)
+        messages = parser.read_messages(
+            limit=limit,
+            offset=offset,
+            archive_date=archive_date,
+            days=days
+        )
 
         return jsonify({
             'success': True,
             'count': len(messages),
-            'messages': messages
+            'messages': messages,
+            'archive_date': archive_date if archive_date else None
         }), 200
 
     except Exception as e:
@@ -238,6 +261,75 @@ def sync_messages():
 
     except Exception as e:
         logger.error(f"Error syncing messages: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/archives', methods=['GET'])
+def get_archives():
+    """
+    Get list of available message archives.
+
+    Returns:
+        JSON with list of archives, each with:
+        - date (str): Archive date in YYYY-MM-DD format
+        - message_count (int): Number of messages in archive
+        - file_size (int): Archive file size in bytes
+    """
+    try:
+        archives = archive_manager.list_archives()
+
+        return jsonify({
+            'success': True,
+            'archives': archives,
+            'count': len(archives)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error listing archives: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/archive/trigger', methods=['POST'])
+def trigger_archive():
+    """
+    Manually trigger message archiving.
+
+    JSON body:
+        date (str): Date to archive in YYYY-MM-DD format (optional, defaults to yesterday)
+
+    Returns:
+        JSON with archive operation result
+    """
+    try:
+        data = request.get_json() or {}
+        archive_date = data.get('date')
+
+        # Validate date format if provided
+        if archive_date:
+            try:
+                datetime.strptime(archive_date, '%Y-%m-%d')
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid date format: {archive_date}. Expected YYYY-MM-DD'
+                }), 400
+
+        # Trigger archiving
+        result = archive_manager.archive_messages(archive_date)
+
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+
+    except Exception as e:
+        logger.error(f"Error triggering archive: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

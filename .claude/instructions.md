@@ -45,12 +45,15 @@ Location: `~/.config/meshcore/<device_name>.msgs` (JSON Lines)
 ## Environment Variables
 
 ```
-MC_SERIAL_PORT    - Serial device path
-MC_DEVICE_NAME    - Device name (for .msgs file)
-MC_CONFIG_DIR     - meshcore config directory
-MC_REFRESH_INTERVAL - Auto-refresh seconds (default: 60)
-MC_INACTIVE_HOURS - Contact cleanup threshold (default: 48)
-FLASK_PORT        - Web server port (default: 5000)
+MC_SERIAL_PORT         - Serial device path
+MC_DEVICE_NAME         - Device name (for .msgs file)
+MC_CONFIG_DIR          - meshcore config directory
+MC_REFRESH_INTERVAL    - Auto-refresh seconds (default: 60)
+MC_INACTIVE_HOURS      - Contact cleanup threshold (default: 48)
+MC_ARCHIVE_DIR         - Archive directory path (default: /root/.archive/meshcore)
+MC_ARCHIVE_ENABLED     - Enable automatic archiving (default: true)
+MC_ARCHIVE_RETENTION_DAYS - Days to show in live view (default: 7)
+FLASK_PORT             - Web server port (default: 5000)
 ```
 
 ## Project Structure
@@ -65,6 +68,8 @@ mc-webui/
 │   ├── meshcore/
 │   │   ├── cli.py        # meshcli subprocess wrapper
 │   │   └── parser.py     # .msgs file parser
+│   ├── archiver/
+│   │   └── manager.py    # Archive scheduler and management
 │   ├── routes/
 │   │   ├── api.py        # REST endpoints
 │   │   └── views.py      # HTML views
@@ -77,10 +82,14 @@ mc-webui/
 ## API Endpoints
 
 ```
-GET  /api/messages          - List messages
-POST /api/messages          - Send message
-GET  /api/status            - Connection status
-POST /api/contacts/cleanup  - Remove inactive contacts
+GET  /api/messages                - List messages (supports ?archive_date=YYYY-MM-DD&days=N)
+POST /api/messages                - Send message
+GET  /api/status                  - Connection status
+POST /api/contacts/cleanup        - Remove inactive contacts
+GET  /api/archives                - List available archives
+POST /api/archive/trigger         - Manually trigger archiving
+GET  /api/device/info             - Device information
+POST /api/sync                    - Trigger message sync
 ```
 
 ## Important Files

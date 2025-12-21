@@ -25,10 +25,14 @@
                 <small class="text-white-50">- {{ device_name }}</small>
                 {% endif %}
             </span>
-            <div class="d-flex align-items-center">
-                <button class="btn btn-outline-light btn-sm me-2" id="refreshBtn" title="Refresh messages">
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-light btn-sm" id="refreshBtn" title="Refresh messages">
                     <i class="bi bi-arrow-clockwise"></i> Refresh
                 </button>
+                <select id="dateSelector" class="form-select form-select-sm" style="width: auto; min-width: 150px;" title="Select date">
+                    <option value="">Today (Live)</option>
+                    <!-- Archive dates loaded dynamically via JavaScript -->
+                </select>
                 <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal" title="Settings">
                     <i class="bi bi-gear"></i>
                 </button>
