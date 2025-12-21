@@ -8,7 +8,8 @@
 
 /* Page Layout */
 html, body {
-    height: 100vh;
+    height: 100vh; /* Fallback for older browsers */
+    height: 100dvh; /* Dynamic viewport height (mobile-friendly) */
     margin: 0;
     overflow: hidden;
 }
@@ -23,6 +24,7 @@ main {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0; /* Important for flex children */
 }
 
 /* Messages Container */

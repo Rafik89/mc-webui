@@ -3,10 +3,10 @@
 {% block title %}Chat - mc-webui{% endblock %}
 
 {% block content %}
-<div class="container-fluid h-100 d-flex flex-column">
+<div class="container-fluid d-flex flex-column" style="height: 100%;">
     <!-- Messages Container -->
-    <div class="row flex-grow-1 overflow-hidden">
-        <div class="col-12 h-100">
+    <div class="row flex-grow-1 overflow-hidden" style="min-height: 0;">
+        <div class="col-12" style="height: 100%;">
             <div id="messagesContainer" class="messages-container h-100 overflow-auto p-3">
                 <div id="messagesList">
                     <!-- Messages will be loaded here via JavaScript -->
