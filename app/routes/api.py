@@ -96,10 +96,12 @@ def send_message():
             }), 400
 
         # MeshCore message length limit (~180-200 bytes for LoRa)
-        if len(text) > 200:
+        # Count UTF-8 bytes, not Unicode characters
+        byte_length = len(text.encode('utf-8'))
+        if byte_length > 200:
             return jsonify({
                 'success': False,
-                'error': f'Message too long ({len(text)} chars). Maximum 200 characters allowed due to LoRa constraints.'
+                'error': f'Message too long ({byte_length} bytes). Maximum 200 bytes allowed due to LoRa constraints.'
             }), 400
 
         reply_to = data.get('reply_to')

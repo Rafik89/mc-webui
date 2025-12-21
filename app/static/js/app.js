@@ -398,21 +398,24 @@ function formatTime(timestamp) {
 }
 
 /**
- * Update character counter
+ * Update character counter (counts UTF-8 bytes, not characters)
  */
 function updateCharCounter() {
     const input = document.getElementById('messageInput');
     const counter = document.getElementById('charCounter');
-    const length = input.value.length;
-    const maxLength = 200;
 
-    counter.textContent = `${length} / ${maxLength}`;
+    // Count UTF-8 bytes, not Unicode characters
+    const encoder = new TextEncoder();
+    const byteLength = encoder.encode(input.value).length;
+    const maxBytes = 200;
+
+    counter.textContent = `${byteLength} / ${maxBytes}`;
 
     // Visual warning when approaching limit
-    if (length >= maxLength * 0.9) {
+    if (byteLength >= maxBytes * 0.9) {
         counter.classList.remove('text-muted', 'text-warning');
         counter.classList.add('text-danger', 'fw-bold');
-    } else if (length >= maxLength * 0.75) {
+    } else if (byteLength >= maxBytes * 0.75) {
         counter.classList.remove('text-muted', 'text-danger');
         counter.classList.add('text-warning', 'fw-bold');
     } else {
