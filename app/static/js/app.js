@@ -663,10 +663,12 @@ async function loadChannels() {
 function populateChannelSelector(channels) {
     const selector = document.getElementById('channelSelector');
 
-    // Clear current options
-    selector.innerHTML = '';
+    // Remove all options - we'll rebuild everything from API data
+    while (selector.options.length > 0) {
+        selector.remove(0);
+    }
 
-    // Add channels
+    // Add all channels from API (including Public at index 0)
     channels.forEach(channel => {
         const option = document.createElement('option');
         option.value = channel.index;
@@ -674,10 +676,17 @@ function populateChannelSelector(channels) {
         selector.appendChild(option);
     });
 
-    // Set current selection
+    // Restore selection (use currentChannelIdx from global state)
     selector.value = currentChannelIdx;
 
-    console.log(`Loaded ${channels.length} channels`);
+    // If the saved channel doesn't exist, fall back to Public (0)
+    if (selector.value !== currentChannelIdx.toString()) {
+        currentChannelIdx = 0;
+        selector.value = 0;
+        localStorage.setItem('mc_active_channel', '0');
+    }
+
+    console.log(`Loaded ${channels.length} channels, active: ${currentChannelIdx}`);
 }
 
 /**
