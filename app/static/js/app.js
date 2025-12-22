@@ -103,8 +103,12 @@ function setupEventListeners() {
         localStorage.setItem('mc_active_channel', currentChannelIdx);
         loadMessages();
 
-        const channelName = e.target.options[e.target.selectedIndex].text;
-        showNotification(`Switched to channel: ${channelName}`, 'info');
+        // Show notification only if we have a valid selection
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        if (selectedOption) {
+            const channelName = selectedOption.text;
+            showNotification(`Switched to channel: ${channelName}`, 'info');
+        }
     });
 
     // Channels modal - load channels when opened
@@ -643,17 +647,21 @@ function setupEmojiPicker() {
  */
 async function loadChannels() {
     try {
+        console.log('[loadChannels] Fetching channels from API...');
         const response = await fetch('/api/channels');
         const data = await response.json();
 
+        console.log('[loadChannels] API response:', data);
+
         if (data.success) {
             availableChannels = data.channels;
+            console.log('[loadChannels] Channels loaded:', availableChannels.length);
             populateChannelSelector(data.channels);
         } else {
-            console.error('Error loading channels:', data.error);
+            console.error('[loadChannels] Error loading channels:', data.error);
         }
     } catch (error) {
-        console.error('Error loading channels:', error);
+        console.error('[loadChannels] Exception:', error);
     }
 }
 
@@ -823,13 +831,4 @@ function copyChannelKey() {
     input.select();
     document.execCommand('copy');
     showNotification('Channel key copied to clipboard!', 'success');
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
