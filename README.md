@@ -241,7 +241,4 @@ This is an open-source project. Contributions are welcome!
 - [meshcore-cli GitHub](https://github.com/meshcore/meshcore-cli)
 - [Product Requirements Document](PRD.md)
 
----
 
-**Target Deployment:** Debian VM @ 192.168.131.80
-**Hardware:** Heltec WiFi LoRa 32 V4
