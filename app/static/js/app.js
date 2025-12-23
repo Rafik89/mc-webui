@@ -13,14 +13,11 @@ let lastSeenTimestamps = {};  // Track last seen message timestamp per channel
 let unreadCounts = {};  // Track unread message counts per channel
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('mc-webui initialized');
 
     // Load last seen timestamps from localStorage
     loadLastSeenTimestamps();
-
-    // Load channels list
-    loadChannels();
 
     // Restore last selected channel from localStorage
     const savedChannel = localStorage.getItem('mc_active_channel');
@@ -28,23 +25,23 @@ document.addEventListener('DOMContentLoaded', function() {
         currentChannelIdx = parseInt(savedChannel);
     }
 
-    // Load archive list
-    loadArchiveList();
-
-    // Load initial messages
-    loadMessages();
-
-    // Setup auto-refresh
-    setupAutoRefresh();
-
-    // Setup event listeners
+    // Setup event listeners (do this early)
     setupEventListeners();
 
     // Setup emoji picker
     setupEmojiPicker();
 
-    // Load device status
+    // CRITICAL: Load channels FIRST before anything else
+    // This ensures channels are available for checkForUpdates()
+    await loadChannels();
+
+    // Now load other data (can run in parallel)
+    loadArchiveList();
+    loadMessages();
     loadStatus();
+
+    // Setup auto-refresh AFTER channels are loaded
+    setupAutoRefresh();
 });
 
 /**
@@ -647,13 +644,33 @@ function markChannelAsRead(channelIdx, timestamp) {
  * Check for new messages across all channels
  */
 async function checkForUpdates() {
+    // Don't check if channels aren't loaded yet
+    if (!availableChannels || availableChannels.length === 0) {
+        console.log('[checkForUpdates] Skipping - channels not loaded yet');
+        return;
+    }
+
     try {
         // Build query with last seen timestamps
         const lastSeenParam = encodeURIComponent(JSON.stringify(lastSeenTimestamps));
-        const response = await fetch(`/api/messages/updates?last_seen=${lastSeenParam}`);
+
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+        const response = await fetch(`/api/messages/updates?last_seen=${lastSeenParam}`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            console.warn(`[checkForUpdates] HTTP ${response.status}: ${response.statusText}`);
+            return;
+        }
+
         const data = await response.json();
 
-        if (data.success) {
+        if (data.success && data.channels) {
             // Update unread counts
             data.channels.forEach(channel => {
                 unreadCounts[channel.index] = channel.unread_count;
@@ -670,7 +687,11 @@ async function checkForUpdates() {
             }
         }
     } catch (error) {
-        console.error('Error checking for updates:', error);
+        if (error.name === 'AbortError') {
+            console.warn('[checkForUpdates] Request timeout after 15s');
+        } else {
+            console.error('[checkForUpdates] Error:', error.message || error);
+        }
     }
 }
 
@@ -796,12 +817,24 @@ function setupEmojiPicker() {
 async function loadChannels() {
     try {
         console.log('[loadChannels] Fetching channels from API...');
-        const response = await fetch('/api/channels');
-        const data = await response.json();
 
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+        const response = await fetch('/api/channels', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
         console.log('[loadChannels] API response:', data);
 
-        if (data.success) {
+        if (data.success && data.channels && data.channels.length > 0) {
             availableChannels = data.channels;
             console.log('[loadChannels] Channels loaded:', availableChannels.length);
             populateChannelSelector(data.channels);
@@ -809,10 +842,30 @@ async function loadChannels() {
             // Check for unread messages after channels are loaded
             await checkForUpdates();
         } else {
-            console.error('[loadChannels] Error loading channels:', data.error);
+            console.error('[loadChannels] Error loading channels:', data.error || 'No channels returned');
+            // Fallback: ensure at least Public channel exists
+            ensurePublicChannel();
         }
     } catch (error) {
-        console.error('[loadChannels] Exception:', error);
+        if (error.name === 'AbortError') {
+            console.error('[loadChannels] Request timeout after 10s');
+        } else {
+            console.error('[loadChannels] Exception:', error.message || error);
+        }
+        // Fallback: ensure at least Public channel exists
+        ensurePublicChannel();
+    }
+}
+
+/**
+ * Fallback: ensure Public channel exists in dropdown even if API fails
+ */
+function ensurePublicChannel() {
+    const selector = document.getElementById('channelSelector');
+    if (!selector || selector.options.length === 0) {
+        console.log('[ensurePublicChannel] Adding fallback Public channel');
+        availableChannels = [{index: 0, name: 'Public', key: ''}];
+        populateChannelSelector(availableChannels);
     }
 }
 
@@ -821,6 +874,16 @@ async function loadChannels() {
  */
 function populateChannelSelector(channels) {
     const selector = document.getElementById('channelSelector');
+    if (!selector) {
+        console.error('[populateChannelSelector] Channel selector element not found');
+        return;
+    }
+
+    // Validate input
+    if (!channels || !Array.isArray(channels) || channels.length === 0) {
+        console.warn('[populateChannelSelector] Invalid channels array, using fallback');
+        channels = [{index: 0, name: 'Public', key: ''}];
+    }
 
     // Remove all options - we'll rebuild everything from API data
     while (selector.options.length > 0) {
@@ -829,10 +892,14 @@ function populateChannelSelector(channels) {
 
     // Add all channels from API (including Public at index 0)
     channels.forEach(channel => {
-        const option = document.createElement('option');
-        option.value = channel.index;
-        option.textContent = channel.name;
-        selector.appendChild(option);
+        if (channel && typeof channel.index !== 'undefined' && channel.name) {
+            const option = document.createElement('option');
+            option.value = channel.index;
+            option.textContent = channel.name;
+            selector.appendChild(option);
+        } else {
+            console.warn('[populateChannelSelector] Skipping invalid channel:', channel);
+        }
     });
 
     // Restore selection (use currentChannelIdx from global state)
@@ -840,12 +907,13 @@ function populateChannelSelector(channels) {
 
     // If the saved channel doesn't exist, fall back to Public (0)
     if (selector.value !== currentChannelIdx.toString()) {
+        console.log(`[populateChannelSelector] Channel ${currentChannelIdx} not found, falling back to Public`);
         currentChannelIdx = 0;
         selector.value = 0;
         localStorage.setItem('mc_active_channel', '0');
     }
 
-    console.log(`Loaded ${channels.length} channels, active: ${currentChannelIdx}`);
+    console.log(`[populateChannelSelector] Loaded ${channels.length} channels, active: ${currentChannelIdx}`);
 }
 
 /**
