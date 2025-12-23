@@ -1,10 +1,10 @@
 """
-MeshCore CLI wrapper - executes meshcli commands via subprocess
+MeshCore CLI wrapper - executes meshcli commands via HTTP bridge
 """
 
-import subprocess
 import logging
 import re
+import requests
 from typing import Tuple, Optional, List, Dict
 from app.config import config
 
@@ -22,47 +22,54 @@ class MeshCLIError(Exception):
 
 def _run_command(args: list, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, str, str]:
     """
-    Execute a meshcli command and return result.
+    Execute meshcli command via HTTP bridge.
 
     Args:
-        args: Command arguments (will be prepended with meshcli -s <port>)
+        args: Command arguments (e.g., ['recv'], ['public', 'Hello'])
         timeout: Command timeout in seconds
 
     Returns:
         Tuple of (success, stdout, stderr)
     """
-    cmd = config.meshcli_command + args
-    logger.info(f"Executing: {' '.join(cmd)}")
+    logger.info(f"Executing via bridge: {' '.join(args)}")
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False
+        response = requests.post(
+            config.MC_BRIDGE_URL,
+            json={
+                'args': args,
+                'timeout': timeout
+            },
+            timeout=timeout + 5  # Add 5s buffer for HTTP timeout
         )
 
-        success = result.returncode == 0
-        stdout = result.stdout.strip()
-        stderr = result.stderr.strip()
+        # Handle HTTP errors
+        if response.status_code != 200:
+            logger.error(f"Bridge HTTP error {response.status_code}: {response.text}")
+            return False, '', f'Bridge HTTP error: {response.status_code}'
+
+        data = response.json()
+
+        success = data.get('success', False)
+        stdout = data.get('stdout', '').strip()
+        stderr = data.get('stderr', '').strip()
 
         if not success:
             logger.warning(f"Command failed: {stderr or stdout}")
 
         return success, stdout, stderr
 
-    except subprocess.TimeoutExpired:
-        logger.error(f"Command timeout after {timeout}s: {' '.join(cmd)}")
-        return False, "", f"Command timeout after {timeout}s"
+    except requests.exceptions.Timeout:
+        logger.error(f"Bridge request timeout after {timeout}s")
+        return False, '', f'Bridge timeout after {timeout} seconds'
 
-    except FileNotFoundError:
-        logger.error("meshcli command not found")
-        return False, "", "meshcli not found - is meshcore-cli installed?"
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Cannot connect to meshcore-bridge: {e}")
+        return False, '', 'Cannot connect to meshcore-bridge service'
 
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return False, "", str(e)
+        logger.error(f"Bridge communication error: {e}")
+        return False, '', str(e)
 
 
 def recv_messages() -> Tuple[bool, str]:

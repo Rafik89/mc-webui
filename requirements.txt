@@ -20,5 +20,5 @@ python-dateutil==2.8.2
 qrcode==7.4.2
 Pillow==10.1.0
 
-# Additional utilities (if needed later)
-# requests==2.31.0  # For future API integrations
+# HTTP Client for MeshCore Bridge communication
+requests==2.31.0

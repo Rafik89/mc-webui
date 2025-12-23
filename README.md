@@ -22,8 +22,8 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 
 - **Backend:** Python 3.11+, Flask
 - **Frontend:** HTML5, Bootstrap 5, vanilla JavaScript
-- **Deployment:** Docker / Docker Compose
-- **Communication:** subprocess calls to `meshcli`
+- **Deployment:** Docker / Docker Compose (2-container architecture)
+- **Communication:** HTTP bridge to meshcore-cli (USB isolation for stability)
 - **Data source:** `~/.config/meshcore/<device_name>.msgs` (JSON Lines)
 
 ## Quick Start
@@ -32,7 +32,8 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 
 - Docker and Docker Compose installed
 - Heltec V4 device connected via USB
-- meshcore-cli configured on host system
+
+**Note:** meshcore-cli is automatically installed inside the Docker container - no host installation required!
 
 ### Installation
 
@@ -90,38 +91,58 @@ All configuration is done via environment variables in the `.env` file:
 
 See [.env.example](.env.example) for a complete example.
 
+## Architecture
+
+mc-webui uses a **2-container architecture** for improved USB stability:
+
+1. **meshcore-bridge** - Lightweight service with exclusive USB device access
+   - Runs meshcore-cli subprocess calls
+   - Exposes HTTP API on port 5001 (internal only)
+   - Automatically restarts on USB communication issues
+
+2. **mc-webui** - Main web application
+   - Flask-based web interface
+   - Communicates with bridge via HTTP
+   - No direct USB access (prevents device locking)
+
+This separation solves USB timeout/deadlock issues common in Docker + VM environments.
+
 ## Project Structure
 
 ```
 mc-webui/
-├── Dockerfile                  # Docker image definition
-├── docker-compose.yml          # Docker Compose configuration
+├── Dockerfile                      # Main app Docker image
+├── docker-compose.yml              # Multi-container orchestration
+├── meshcore-bridge/
+│   ├── Dockerfile                  # Bridge service image
+│   ├── bridge.py                   # HTTP API wrapper for meshcli
+│   └── requirements.txt            # Bridge dependencies (Flask only)
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                 # Flask entry point
-│   ├── config.py               # Configuration from env vars
+│   ├── main.py                     # Flask entry point
+│   ├── config.py                   # Configuration from env vars
 │   ├── meshcore/
 │   │   ├── __init__.py
-│   │   ├── cli.py              # meshcli wrapper (subprocess)
-│   │   └── parser.py           # .msgs file parser
+│   │   ├── cli.py                  # HTTP client for bridge API
+│   │   └── parser.py               # .msgs file parser
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   ├── api.py              # REST API endpoints
-│   │   └── views.py            # HTML views
+│   │   ├── api.py                  # REST API endpoints
+│   │   └── views.py                # HTML views
 │   ├── static/
 │   │   ├── css/
-│   │   │   └── style.css       # Custom styles
+│   │   │   └── style.css           # Custom styles
 │   │   └── js/
-│   │       └── app.js          # Frontend logic
+│   │       └── app.js              # Frontend logic
 │   └── templates/
-│       ├── base.html           # Base template
-│       ├── index.html          # Main chat view
-│       └── components/         # Reusable components
-├── requirements.txt            # Python dependencies
-├── .env.example               # Example environment config
+│       ├── base.html               # Base template
+│       ├── index.html              # Main chat view
+│       └── components/             # Reusable components
+├── requirements.txt                # Python dependencies
+├── .env.example                   # Example environment config
 ├── .gitignore
-├── README.md                  # This file
-└── PRD.md                     # Product Requirements Document
+├── README.md                      # This file
+└── PRD.md                         # Product Requirements Document
 ```
 
 ## Development Status
@@ -233,20 +254,43 @@ sudo chmod 666 /dev/serial/by-id/usb-Espressif*
 
 ### Container won't start
 ```bash
-# Check logs
+# Check logs for both services
+docker compose logs meshcore-bridge
 docker compose logs mc-webui
 
 # Verify .env file exists
 ls -la .env
 
-# Check if port 5000 is available
-sudo netstat -tulpn | grep 5000
+# Check if ports are available
+sudo netstat -tulpn | grep -E '5000|5001'
+```
+
+### USB Communication Issues
+The 2-container architecture resolves common USB timeout/deadlock problems:
+- **meshcore-bridge** has exclusive USB access
+- **mc-webui** uses HTTP (no direct device access)
+- Restarting `mc-webui` **does not** affect USB connection
+- If bridge has USB issues, restart only that service:
+  ```bash
+  docker compose restart meshcore-bridge
+  ```
+
+### Bridge connection errors
+```bash
+# Check bridge health
+docker compose exec mc-webui curl http://meshcore-bridge:5001/health
+
+# Bridge logs
+docker compose logs -f meshcore-bridge
+
+# Test meshcli directly in bridge container
+docker compose exec meshcore-bridge meshcli -s /dev/ttyUSB0 infos
 ```
 
 ### Messages not updating
-- Ensure meshcore-cli is properly configured
 - Check that `.msgs` file exists in `MC_CONFIG_DIR`
-- Verify serial device is accessible from container
+- Verify bridge service is healthy: `docker compose ps`
+- Check bridge logs for command errors
 
 ## Security Notes
 

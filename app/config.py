@@ -14,6 +14,9 @@ class Config:
     MC_DEVICE_NAME = os.getenv('MC_DEVICE_NAME', 'MeshCore')
     MC_CONFIG_DIR = os.getenv('MC_CONFIG_DIR', '/root/.config/meshcore')
 
+    # MeshCore Bridge configuration
+    MC_BRIDGE_URL = os.getenv('MC_BRIDGE_URL', 'http://meshcore-bridge:5001/cli')
+
     # Application settings
     MC_REFRESH_INTERVAL = int(os.getenv('MC_REFRESH_INTERVAL', '60'))
     MC_INACTIVE_HOURS = int(os.getenv('MC_INACTIVE_HOURS', '48'))
@@ -33,11 +36,6 @@ class Config:
     def msgs_file_path(self) -> Path:
         """Get the full path to the .msgs file"""
         return Path(self.MC_CONFIG_DIR) / f"{self.MC_DEVICE_NAME}.msgs"
-
-    @property
-    def meshcli_command(self) -> list:
-        """Get the base meshcli command with serial port"""
-        return ['meshcli', '-s', self.MC_SERIAL_PORT]
 
     @property
     def archive_dir_path(self) -> Path:
