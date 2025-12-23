@@ -10,8 +10,8 @@ from app.config import config
 
 logger = logging.getLogger(__name__)
 
-# Command timeout in seconds
-DEFAULT_TIMEOUT = 30
+# Command timeout in seconds (reduced to prevent long waits)
+DEFAULT_TIMEOUT = 12  # Reduced from 30s - bridge has 10s + 2s buffer
 RECV_TIMEOUT = 60  # recv can take longer
 
 

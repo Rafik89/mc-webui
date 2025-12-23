@@ -8,6 +8,8 @@ The main mc-webui container communicates with this bridge via HTTP.
 import os
 import subprocess
 import logging
+import threading
+import time
 from flask import Flask, request, jsonify
 
 logging.basicConfig(
@@ -20,12 +22,20 @@ app = Flask(__name__)
 
 # Configuration
 MC_SERIAL_PORT = os.getenv('MC_SERIAL_PORT', '/dev/ttyUSB0')
-DEFAULT_TIMEOUT = 30
+DEFAULT_TIMEOUT = 10  # Reduced from 30s to 10s
 RECV_TIMEOUT = 60
+
+# Thread lock to prevent concurrent meshcli calls
+# Only one meshcli command can execute at a time to avoid USB conflicts
+meshcli_lock = threading.Lock()
+lock_wait_timeout = 15  # Max time to wait for lock
 
 def run_meshcli_command(args, timeout=DEFAULT_TIMEOUT):
     """
-    Execute meshcli command via subprocess.
+    Execute meshcli command via subprocess with locking.
+
+    Uses a thread lock to ensure only one meshcli command runs at a time,
+    preventing USB port conflicts and protocol errors.
 
     Args:
         args: List of command arguments
@@ -36,9 +46,23 @@ def run_meshcli_command(args, timeout=DEFAULT_TIMEOUT):
     """
     full_command = ['meshcli', '-s', MC_SERIAL_PORT] + args
 
-    logger.info(f"Executing: {' '.join(full_command)}")
+    logger.info(f"Waiting for lock to execute: {' '.join(full_command)}")
+
+    # Try to acquire lock with timeout
+    lock_acquired = meshcli_lock.acquire(timeout=lock_wait_timeout)
+
+    if not lock_acquired:
+        logger.error(f"Failed to acquire lock after {lock_wait_timeout}s - another command is running")
+        return {
+            'success': False,
+            'stdout': '',
+            'stderr': f'Another meshcli command is already running (timeout after {lock_wait_timeout}s)',
+            'returncode': -1
+        }
 
     try:
+        logger.info(f"Lock acquired, executing: {' '.join(full_command)}")
+
         result = subprocess.run(
             full_command,
             capture_output=True,
@@ -50,6 +74,8 @@ def run_meshcli_command(args, timeout=DEFAULT_TIMEOUT):
 
         if not success:
             logger.warning(f"Command failed with code {result.returncode}: {result.stderr}")
+        else:
+            logger.info(f"Command completed successfully")
 
         return {
             'success': success,
@@ -74,6 +100,10 @@ def run_meshcli_command(args, timeout=DEFAULT_TIMEOUT):
             'stderr': str(e),
             'returncode': -1
         }
+    finally:
+        # Always release lock
+        meshcli_lock.release()
+        logger.info("Lock released")
 
 
 @app.route('/health', methods=['GET'])

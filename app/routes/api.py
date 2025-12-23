@@ -6,6 +6,7 @@ import logging
 import json
 import re
 import base64
+import time
 from datetime import datetime
 from io import BytesIO
 from flask import Blueprint, jsonify, request, send_file
@@ -16,6 +17,53 @@ from app.archiver import manager as archive_manager
 logger = logging.getLogger(__name__)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+# Simple cache for get_channels() to reduce USB/meshcli calls
+# Channels don't change frequently, so caching for 30s is safe
+_channels_cache = None
+_channels_cache_timestamp = 0
+CHANNELS_CACHE_TTL = 30  # seconds
+
+
+def get_channels_cached(force_refresh=False):
+    """
+    Get channels with caching to reduce USB/meshcli calls.
+
+    Args:
+        force_refresh: If True, bypass cache and fetch fresh data
+
+    Returns:
+        Tuple of (success, channels_list)
+    """
+    global _channels_cache, _channels_cache_timestamp
+
+    current_time = time.time()
+
+    # Return cached data if valid and not forcing refresh
+    if (not force_refresh and
+        _channels_cache is not None and
+        (current_time - _channels_cache_timestamp) < CHANNELS_CACHE_TTL):
+        logger.debug(f"Returning cached channels (age: {current_time - _channels_cache_timestamp:.1f}s)")
+        return True, _channels_cache
+
+    # Fetch fresh data
+    logger.debug("Fetching fresh channels from meshcli")
+    success, channels = cli.get_channels()
+
+    if success:
+        _channels_cache = channels
+        _channels_cache_timestamp = current_time
+        logger.debug(f"Channels cached ({len(channels)} channels)")
+
+    return success, channels
+
+
+def invalidate_channels_cache():
+    """Invalidate channels cache (call after add/remove channel)"""
+    global _channels_cache, _channels_cache_timestamp
+    _channels_cache = None
+    _channels_cache_timestamp = 0
+    logger.debug("Channels cache invalidated")
 
 
 @api_bp.route('/messages', methods=['GET'])
@@ -352,13 +400,13 @@ def trigger_archive():
 @api_bp.route('/channels', methods=['GET'])
 def get_channels():
     """
-    Get list of configured channels.
+    Get list of configured channels (cached for 30s).
 
     Returns:
         JSON with channels list
     """
     try:
-        success, channels = cli.get_channels()
+        success, channels = get_channels_cached()
 
         if success:
             return jsonify({
@@ -417,6 +465,7 @@ def create_channel():
         success, message, key = cli.add_channel(name)
 
         if success:
+            invalidate_channels_cache()  # Clear cache to force refresh
             return jsonify({
                 'success': True,
                 'message': message,
@@ -469,7 +518,7 @@ def join_channel():
             index = int(data['index'])
         else:
             # Find first free slot (1-7, skip 0 which is Public)
-            success_ch, channels = cli.get_channels()
+            success_ch, channels = get_channels_cached()
             if not success_ch:
                 return jsonify({
                     'success': False,
@@ -492,6 +541,7 @@ def join_channel():
         success, message = cli.set_channel(index, name, key)
 
         if success:
+            invalidate_channels_cache()  # Clear cache to force refresh
             return jsonify({
                 'success': True,
                 'message': f'Joined channel "{name}" at slot {index}',
@@ -530,6 +580,7 @@ def delete_channel(index):
         success, message = cli.remove_channel(index)
 
         if success:
+            invalidate_channels_cache()  # Clear cache to force refresh
             return jsonify({
                 'success': True,
                 'message': f'Channel {index} removed'
@@ -682,8 +733,8 @@ def get_messages_updates():
         except (json.JSONDecodeError, ValueError):
             last_seen = {}
 
-        # Get list of channels
-        success_ch, channels = cli.get_channels()
+        # Get list of channels (cached)
+        success_ch, channels = get_channels_cached()
         if not success_ch:
             return jsonify({
                 'success': False,
