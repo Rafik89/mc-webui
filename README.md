@@ -146,25 +146,32 @@ mc-webui/
 ├── requirements.txt                # Python dependencies
 ├── .env.example                   # Example environment config
 ├── .gitignore
-├── README.md                      # This file
-└── PRD.md                         # Product Requirements Document
+└── README.md                      # This file
 ```
 
 ## Development Status
 
-🚧 **Current Phase: 1 - Backend Basics** ✅
+🚀 **Core Features Complete** ✅
 
-### Roadmap
+### Completed Features
 
-- [x] Phase 0: Environment Setup
-- [x] Phase 1: Backend Basics (REST API, message parsing, CLI wrapper)
-- [x] Phase 2: Frontend Chat View (Bootstrap UI, message display)
-- [x] Phase 3: Message Sending (Send form, reply functionality)
-- [x] Phase 4: Auto-refresh (60s polling, live updates)
-- [x] Phase 5: Contact Management (Cleanup modal)
-- [ ] Phase 6: Polish & Documentation (Testing, optimization)
+- [x] Environment Setup & Docker Architecture
+- [x] Backend Basics (REST API, message parsing, CLI wrapper)
+- [x] Frontend Chat View (Bootstrap UI, message display)
+- [x] Message Sending (Send form, reply functionality)
+- [x] Intelligent Auto-refresh (10s checks, UI updates only when needed)
+- [x] Contact Management (Cleanup modal with configurable threshold)
+- [x] Channel Management (Create, join, share via QR, delete with auto-cleanup)
+- [x] Public Channels (# prefix support, auto-key generation)
+- [x] Message Archiving (Daily archiving with browse-by-date selector)
+- [x] Smart Notifications (Unread counters per channel and total)
 
-See [PRD.md](PRD.md) for detailed requirements and implementation plan.
+### Next Steps
+
+- [ ] **Private Messages (DM)** - Send and receive direct messages with delivery status tracking
+- [ ] Performance Optimization - Frontend and backend improvements
+- [ ] Enhanced Testing - Unit and integration tests
+- [ ] Documentation Polish - API docs and usage guides
 
 ## Usage
 
@@ -341,6 +348,5 @@ This is an open-source project. Contributions are welcome!
 
 - [MeshCore Documentation](https://meshcore.org)
 - [meshcore-cli GitHub](https://github.com/meshcore-dev/meshcore-cli)
-- [Product Requirements Document](PRD.md)
 
 
