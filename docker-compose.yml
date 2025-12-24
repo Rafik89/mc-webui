@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MeshCore Bridge - Handles USB communication with meshcli
   meshcore-bridge:
