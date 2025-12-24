@@ -6,7 +6,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 
 **mc-webui** is a Flask-based web application that wraps `meshcore-cli`, eliminating the need for SSH/terminal access when using MeshCore chat on a Heltec V4 device connected to a Debian VM.
 
-<img src="images/main_window.png" alt="Main Chat Window" width="200px"><img src="images/unread_msgs.png" alt="Unread messages" width="200px"><img src="images/menu.png" alt="Menu" width="200px"><img src="images/channel_management.png" alt="Channel management" width="200px"><img src="images/msg_archive.png" alt="Message history" width="200px"><img src="images/settings.png" alt="Settings" width="200px">
+<img src="images/main_window.png" alt="Main Chat Window" width="200px"> <img src="images/unread_msgs.png" alt="Unread messages" width="200px"> <img src="images/menu.png" alt="Menu" width="200px"> <img src="images/channel_management.png" alt="Channel management" width="200px"> <img src="images/msg_archive.png" alt="Message history" width="200px"> <img src="images/settings.png" alt="Settings" width="200px">
 
 ### Key Features
 
