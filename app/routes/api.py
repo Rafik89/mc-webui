@@ -298,6 +298,94 @@ def get_device_info():
         }), 500
 
 
+# =============================================================================
+# Special Commands
+# =============================================================================
+
+# Registry of available special commands
+SPECIAL_COMMANDS = {
+    'advert': {
+        'function': cli.advert,
+        'description': 'Send single advertisement (recommended)',
+    },
+    'floodadv': {
+        'function': cli.floodadv,
+        'description': 'Flood advertisement (use sparingly!)',
+    },
+}
+
+
+@api_bp.route('/device/command', methods=['POST'])
+def execute_special_command():
+    """
+    Execute a special device command.
+
+    JSON body:
+        command (str): Command name (required) - one of: advert, floodadv
+
+    Returns:
+        JSON with command result
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'command' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required field: command'
+            }), 400
+
+        command = data['command'].strip().lower()
+
+        if command not in SPECIAL_COMMANDS:
+            return jsonify({
+                'success': False,
+                'error': f'Unknown command: {command}. Available commands: {", ".join(SPECIAL_COMMANDS.keys())}'
+            }), 400
+
+        # Execute the command
+        cmd_info = SPECIAL_COMMANDS[command]
+        success, message = cmd_info['function']()
+
+        if success:
+            return jsonify({
+                'success': True,
+                'command': command,
+                'message': message or f'{command} executed successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'command': command,
+                'error': message
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error executing special command: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/device/commands', methods=['GET'])
+def list_special_commands():
+    """
+    List available special commands.
+
+    Returns:
+        JSON with list of available commands
+    """
+    commands = [
+        {'name': name, 'description': info['description']}
+        for name, info in SPECIAL_COMMANDS.items()
+    ]
+    return jsonify({
+        'success': True,
+        'commands': commands
+    }), 200
+
+
 @api_bp.route('/sync', methods=['POST'])
 def sync_messages():
     """

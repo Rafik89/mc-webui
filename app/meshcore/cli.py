@@ -264,3 +264,39 @@ def remove_channel(index: int) -> Tuple[bool, str]:
 
     success, stdout, stderr = _run_command(['remove_channel', str(index)])
     return success, stdout or stderr
+
+
+# =============================================================================
+# Special Commands (Network Advertisement)
+# =============================================================================
+
+def advert() -> Tuple[bool, str]:
+    """
+    Send a single advertisement frame to the mesh network.
+
+    This is the recommended way to announce node presence.
+    Uses minimal airtime and follows normal routing rules.
+
+    Returns:
+        Tuple of (success, message)
+    """
+    success, stdout, stderr = _run_command(['advert'])
+    return success, stdout or stderr
+
+
+def floodadv() -> Tuple[bool, str]:
+    """
+    Send advertisement in flooding mode (broadcast storm).
+
+    WARNING: This should be used sparingly! It causes high airtime usage
+    and can destabilize larger networks. Use only for:
+    - Initial network bootstrap
+    - After device reset/firmware change
+    - When routing is broken
+    - Debug/testing purposes
+
+    Returns:
+        Tuple of (success, message)
+    """
+    success, stdout, stderr = _run_command(['floodadv'])
+    return success, stdout or stderr

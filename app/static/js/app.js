@@ -221,6 +221,19 @@ function setupEventListeners() {
     document.getElementById('scanQRBtn').addEventListener('click', function() {
         showNotification('QR scanning feature coming soon! For now, manually enter the channel details.', 'info');
     });
+
+    // Network Commands: Advert button
+    document.getElementById('advertBtn').addEventListener('click', async function() {
+        await executeSpecialCommand('advert');
+    });
+
+    // Network Commands: Flood Advert button (with confirmation)
+    document.getElementById('floodadvBtn').addEventListener('click', async function() {
+        if (!confirm('Flood Advertisement uses high airtime and should only be used for network recovery.\n\nAre you sure you want to proceed?')) {
+            return;
+        }
+        await executeSpecialCommand('floodadv');
+    });
 }
 
 /**
@@ -459,6 +472,51 @@ async function cleanupContacts() {
         showNotification('Cleanup failed', 'danger');
     } finally {
         btn.disabled = false;
+    }
+}
+
+/**
+ * Execute a special device command (advert, floodadv, etc.)
+ */
+async function executeSpecialCommand(command) {
+    // Get button element to disable during execution
+    const btnId = command === 'advert' ? 'advertBtn' : 'floodadvBtn';
+    const btn = document.getElementById(btnId);
+
+    if (btn) {
+        btn.disabled = true;
+    }
+
+    try {
+        const response = await fetch('/api/device/command', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ command: command })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification(data.message || `${command} sent successfully`, 'success');
+        } else {
+            showNotification(`Command failed: ${data.error}`, 'danger');
+        }
+
+        // Close offcanvas menu after command execution
+        const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('mainMenu'));
+        if (offcanvas) {
+            offcanvas.hide();
+        }
+
+    } catch (error) {
+        console.error(`Error executing ${command}:`, error);
+        showNotification(`Failed to execute ${command}`, 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+        }
     }
 }
 

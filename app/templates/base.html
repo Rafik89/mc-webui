@@ -73,6 +73,29 @@
                         <!-- Archive dates loaded dynamically via JavaScript -->
                     </select>
                 </div>
+
+                <!-- Network Commands Section -->
+                <div class="list-group-item py-2 mt-2">
+                    <small class="text-muted fw-bold text-uppercase">Network Commands</small>
+                </div>
+                <button class="list-group-item list-group-item-action d-flex align-items-center gap-3" id="advertBtn" title="Send single advertisement (recommended for normal operation)">
+                    <i class="bi bi-megaphone" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <span>Send Advert</span>
+                        <small class="d-block text-muted">Announce presence (normal)</small>
+                    </div>
+                </button>
+                <button class="list-group-item list-group-item-action d-flex align-items-center gap-3 text-warning" id="floodadvBtn" title="Flood advertisement - use sparingly! High airtime usage.">
+                    <i class="bi bi-broadcast" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <span>Flood Advert</span>
+                        <small class="d-block text-muted">Network recovery only!</small>
+                    </div>
+                </button>
+
+                <div class="list-group-item py-2 mt-2">
+                    <small class="text-muted fw-bold text-uppercase">Configuration</small>
+                </div>
                 <button class="list-group-item list-group-item-action d-flex align-items-center gap-3" data-bs-toggle="modal" data-bs-target="#settingsModal" data-bs-dismiss="offcanvas">
                     <i class="bi bi-gear" style="font-size: 1.5rem;"></i>
                     <span>Settings</span>

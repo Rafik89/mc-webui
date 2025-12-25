@@ -22,6 +22,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - 🧹 **Clean contacts** - Remove inactive contacts with configurable threshold
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
+- 📡 **Network commands** - Send advertisement (advert) or flood advertisement (floodadv) for network management
 
 ## Tech Stack
 
@@ -257,6 +258,31 @@ Access the settings panel to clean up inactive contacts:
 2. Adjust the inactivity threshold (default: 48 hours)
 3. Click "Clean Inactive Contacts"
 4. Confirm the action
+
+### Network Commands
+
+Access network commands from the slide-out menu under "Network Commands" section:
+
+#### Send Advert (Recommended)
+Sends a single advertisement frame to announce your node's presence in the mesh network. This is the normal, energy-efficient way to advertise.
+
+1. Click the menu icon (☰) in the navbar
+2. Click "Send Advert" under Network Commands
+3. Wait for confirmation toast
+
+#### Flood Advert (Use Sparingly!)
+Sends advertisement in flooding mode, forcing all nodes to retransmit. **Use only when:**
+- Starting a completely new network
+- After device reset or firmware change
+- When routing is broken and node is not visible
+- For debugging/testing purposes
+
+⚠️ **Warning:** Flood advertisement causes high airtime usage and can destabilize larger LoRa networks. A confirmation dialog will appear before execution.
+
+1. Click the menu icon (☰) in the navbar
+2. Click "Flood Advert" (highlighted in warning color)
+3. Confirm you want to proceed
+4. Wait for confirmation toast
 
 ## Docker Commands
 
