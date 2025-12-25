@@ -140,10 +140,12 @@ mc-webui/
 │   │   ├── css/
 │   │   │   └── style.css           # Custom styles
 │   │   └── js/
-│   │       └── app.js              # Frontend logic
+│   │       ├── app.js              # Main page frontend logic
+│   │       └── dm.js               # Direct Messages page logic
 │   └── templates/
 │       ├── base.html               # Base template
 │       ├── index.html              # Main chat view
+│       ├── dm.html                 # Direct Messages full-page view
 │       └── components/             # Reusable components
 ├── requirements.txt                # Python dependencies
 ├── .env.example                   # Example environment config
@@ -254,20 +256,22 @@ Click the reply button on any message to insert `@[UserName]` into the text fiel
 
 ### Direct Messages (DM)
 
-Access the Direct Messages feature from the slide-out menu:
+Access the Direct Messages feature:
 
+**From the menu:**
 1. Click the menu icon (☰) in the navbar
 2. Select "Direct Messages" from the menu
-3. View your conversation list with unread indicators
+3. Opens a dedicated full-page DM view
 
-**Starting a new conversation:**
-- Click the "DM" button next to any channel message to start a private chat with that user
-- Or select an existing conversation from the DM list
+**From channel messages:**
+- Click the "DM" button next to any message to start a private chat with that user
+- You'll be redirected to the DM page with that conversation selected
 
-**Sending a direct message:**
-1. Open a conversation
-2. Type your message (max 200 characters)
+**Using the DM page:**
+1. Select a conversation from the dropdown at the top (or one opens automatically if started from a message)
+2. Type your message in the input field (max 200 bytes)
 3. Press Enter or click Send
+4. Click "Back" button to return to the main chat view
 
 **Message status indicators:**
 - ⏳ **Pending** (yellow) - Message sent, waiting for delivery confirmation
@@ -275,7 +279,7 @@ Access the Direct Messages feature from the slide-out menu:
 
 **Notifications:**
 - The bell icon shows a secondary green badge for unread DMs
-- Each conversation shows unread count in the conversation list
+- Each conversation shows unread indicator (*) in the dropdown
 - DM badge in the menu shows total unread DM count
 
 ### Managing Contacts

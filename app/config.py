@@ -42,6 +42,11 @@ class Config:
         """Get the full path to archive directory"""
         return Path(self.MC_ARCHIVE_DIR)
 
+    @property
+    def dm_sent_log_path(self) -> Path:
+        """Get the full path to our sent DM log file (workaround for meshcore-cli bug)"""
+        return Path(self.MC_CONFIG_DIR) / f"{self.MC_DEVICE_NAME}_dm_sent.jsonl"
+
     def __repr__(self):
         return (
             f"Config(device={self.MC_DEVICE_NAME}, "

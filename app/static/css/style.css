@@ -445,12 +445,7 @@ main {
     max-width: 100%;
 }
 
-/* DM Button on channel messages */
-.btn-dm {
-    font-size: 0.65rem;
-    padding: 0.1rem 0.3rem;
-    margin-left: 0.25rem;
-}
+/* DM Button on channel messages - uses same class as Reply (.btn-reply) */
 
 /* DM Empty State */
 .dm-empty-state {

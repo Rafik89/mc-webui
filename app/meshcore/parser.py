@@ -313,6 +313,73 @@ def delete_channel_messages(channel_idx: int) -> bool:
 # =============================================================================
 # Direct Messages (DM) Parsing
 # =============================================================================
+#
+# Note: meshcore-cli has a bug where SENT_MSG entries contain the sender's
+# device name instead of the recipient's name. To work around this, we maintain
+# our own sent DM log file with correct recipient information.
+# See: https://github.com/liamcottle/meshcore-cli/issues/XXX
+# =============================================================================
+
+def save_sent_dm(recipient: str, text: str) -> bool:
+    """
+    Save a sent DM to our own log file (workaround for meshcore-cli bug).
+
+    Args:
+        recipient: Contact name the message was sent to
+        text: Message content
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    dm_log_file = config.dm_sent_log_path
+
+    entry = {
+        'timestamp': int(time.time()),
+        'recipient': recipient,
+        'text': text,
+        'status': 'pending'
+    }
+
+    try:
+        with open(dm_log_file, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        logger.info(f"Saved sent DM to {recipient}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving sent DM: {e}")
+        return False
+
+
+def _read_sent_dm_log() -> List[Dict]:
+    """
+    Read sent DMs from our own log file.
+
+    Returns:
+        List of sent DM entries
+    """
+    dm_log_file = config.dm_sent_log_path
+
+    if not dm_log_file.exists():
+        return []
+
+    entries = []
+    try:
+        with open(dm_log_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    entries.append(data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid JSON in DM log at line {line_num}: {e}")
+                    continue
+    except Exception as e:
+        logger.error(f"Error reading sent DM log: {e}")
+
+    return entries
+
 
 def _parse_priv_message(line: Dict) -> Optional[Dict]:
     """
@@ -361,41 +428,32 @@ def _parse_priv_message(line: Dict) -> Optional[Dict]:
     }
 
 
-def _parse_sent_msg(line: Dict) -> Optional[Dict]:
+def _parse_sent_dm_entry(entry: Dict) -> Optional[Dict]:
     """
-    Parse outgoing private message (SENT_MSG type).
+    Parse a sent DM entry from our own log file.
 
     Args:
-        line: Raw JSON object from .msgs file with type='SENT_MSG'
+        entry: Entry from our dm_sent.jsonl file
 
     Returns:
         Parsed DM dict or None if invalid
     """
-    text = line.get('text', '').strip()
+    text = entry.get('text', '').strip()
     if not text:
         return None
 
-    timestamp = line.get('timestamp', 0)
-    recipient = line.get('name', 'Unknown')
-    expected_ack = line.get('expected_ack', '')
-    suggested_timeout = line.get('suggested_timeout', 10000)  # Default 10s
+    timestamp = entry.get('timestamp', 0)
+    recipient = entry.get('recipient', 'Unknown')
 
     # Generate conversation ID from recipient name
     conversation_id = f"name_{recipient}"
 
-    # Deduplication key - use expected_ack if available
-    if expected_ack:
-        dedup_key = f"sent_{expected_ack}"
-    else:
-        text_hash = hash(text[:50]) & 0xFFFFFFFF
-        dedup_key = f"sent_{timestamp}_{text_hash}"
+    # Deduplication key
+    text_hash = hash(text[:50]) & 0xFFFFFFFF
+    dedup_key = f"sent_{timestamp}_{text_hash}"
 
-    # Calculate status based on timeout
-    age_ms = (time.time() - timestamp) * 1000
-    if age_ms > suggested_timeout:
-        status = 'timeout'
-    else:
-        status = 'pending'
+    # Status is always timeout for old messages (we don't have ACK tracking)
+    status = 'timeout'
 
     return {
         'type': 'dm',
@@ -405,33 +463,10 @@ def _parse_sent_msg(line: Dict) -> Optional[Dict]:
         'timestamp': timestamp,
         'datetime': datetime.fromtimestamp(timestamp).isoformat() if timestamp > 0 else None,
         'is_own': True,
-        'expected_ack': expected_ack,
-        'suggested_timeout': suggested_timeout,
         'status': status,
-        'txt_type': line.get('txt_type', 0),
         'conversation_id': conversation_id,
         'dedup_key': dedup_key
     }
-
-
-def parse_dm_message(line: Dict) -> Optional[Dict]:
-    """
-    Parse a DM message (PRIV or SENT_MSG) from .msgs file.
-
-    Args:
-        line: Raw JSON object from .msgs file
-
-    Returns:
-        Parsed DM dict or None if not a valid DM message
-    """
-    msg_type = line.get('type')
-
-    if msg_type == 'PRIV':
-        return _parse_priv_message(line)
-    elif msg_type == 'SENT_MSG':
-        return _parse_sent_msg(line)
-
-    return None
 
 
 def read_dm_messages(
@@ -440,7 +475,10 @@ def read_dm_messages(
     days: Optional[int] = 7
 ) -> Tuple[List[Dict], Dict[str, str]]:
     """
-    Read and parse DM messages from .msgs file.
+    Read and parse DM messages from .msgs file (incoming) and our sent DM log (outgoing).
+
+    Note: We ignore SENT_MSG entries from .msgs because they have the wrong recipient
+    due to a bug in meshcore-cli.
 
     Args:
         limit: Maximum messages to return (None = all)
@@ -451,84 +489,87 @@ def read_dm_messages(
         Tuple of (messages_list, pubkey_to_name_mapping)
         The mapping helps correlate outgoing messages (name only) with incoming (pubkey)
     """
-    msgs_file = config.msgs_file_path
-
-    if not msgs_file.exists():
-        logger.warning(f"Messages file not found: {msgs_file}")
-        return [], {}
-
     messages = []
     seen_dedup_keys = set()
     pubkey_to_name = {}  # Map pubkey_prefix -> most recent name
 
-    try:
-        with open(msgs_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-
-                try:
-                    data = json.loads(line)
-                    parsed = parse_dm_message(data)
-
-                    if not parsed:
+    # --- Read incoming messages (PRIV) from .msgs file ---
+    msgs_file = config.msgs_file_path
+    if msgs_file.exists():
+        try:
+            with open(msgs_file, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
                         continue
 
-                    # Update pubkey->name mapping from incoming messages
-                    if parsed['direction'] == 'incoming' and parsed.get('pubkey_prefix'):
-                        pubkey_to_name[parsed['pubkey_prefix']] = parsed['sender']
+                    try:
+                        data = json.loads(line)
 
-                    # Deduplicate
-                    if parsed['dedup_key'] in seen_dedup_keys:
+                        # Only process PRIV messages (incoming DMs)
+                        if data.get('type') != 'PRIV':
+                            continue
+
+                        parsed = _parse_priv_message(data)
+                        if not parsed:
+                            continue
+
+                        # Update pubkey->name mapping
+                        if parsed.get('pubkey_prefix'):
+                            pubkey_to_name[parsed['pubkey_prefix']] = parsed['sender']
+
+                        # Deduplicate
+                        if parsed['dedup_key'] in seen_dedup_keys:
+                            continue
+                        seen_dedup_keys.add(parsed['dedup_key'])
+
+                        messages.append(parsed)
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Invalid JSON at line {line_num}: {e}")
                         continue
-                    seen_dedup_keys.add(parsed['dedup_key'])
+                    except Exception as e:
+                        logger.error(f"Error parsing DM at line {line_num}: {e}")
+                        continue
 
-                    # Filter by conversation if specified
-                    if conversation_id:
-                        if parsed['conversation_id'] != conversation_id:
-                            # Also check if it matches via pubkey->name mapping
-                            # For outgoing messages, conversation_id is name-based
-                            # but incoming might be pk-based
-                            if conversation_id.startswith('pk_'):
-                                pk = conversation_id[3:]
-                                name = pubkey_to_name.get(pk)
-                                if name and parsed['conversation_id'] == f"name_{name}":
-                                    # Match via name
-                                    pass
-                                else:
-                                    continue
-                            elif conversation_id.startswith('name_'):
-                                name = conversation_id[5:]
-                                # Check if any pubkey maps to this name
-                                matching_pk = None
-                                for pk, n in pubkey_to_name.items():
-                                    if n == name:
-                                        matching_pk = pk
-                                        break
-                                if matching_pk and parsed['conversation_id'] == f"pk_{matching_pk}":
-                                    # Match via pubkey
-                                    pass
-                                else:
-                                    continue
-                            else:
-                                continue
+        except Exception as e:
+            logger.error(f"Error reading messages file: {e}")
 
-                    messages.append(parsed)
+    # --- Read sent DMs from our own log file ---
+    sent_entries = _read_sent_dm_log()
+    for entry in sent_entries:
+        parsed = _parse_sent_dm_entry(entry)
+        if not parsed:
+            continue
 
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Invalid JSON at line {line_num}: {e}")
-                    continue
-                except Exception as e:
-                    logger.error(f"Error parsing DM at line {line_num}: {e}")
-                    continue
+        # Deduplicate
+        if parsed['dedup_key'] in seen_dedup_keys:
+            continue
+        seen_dedup_keys.add(parsed['dedup_key'])
 
-    except FileNotFoundError:
-        logger.error(f"Messages file not found: {msgs_file}")
-        return [], {}
-    except Exception as e:
-        logger.error(f"Error reading messages file: {e}")
-        return [], {}
+        messages.append(parsed)
+
+    # --- Filter by conversation if specified ---
+    if conversation_id:
+        filtered_messages = []
+        for msg in messages:
+            if msg['conversation_id'] == conversation_id:
+                filtered_messages.append(msg)
+            else:
+                # Check if it matches via pubkey->name mapping
+                if conversation_id.startswith('pk_'):
+                    pk = conversation_id[3:]
+                    name = pubkey_to_name.get(pk)
+                    if name and msg['conversation_id'] == f"name_{name}":
+                        filtered_messages.append(msg)
+                elif conversation_id.startswith('name_'):
+                    name = conversation_id[5:]
+                    # Check if any pubkey maps to this name
+                    for pk, n in pubkey_to_name.items():
+                        if n == name and msg['conversation_id'] == f"pk_{pk}":
+                            filtered_messages.append(msg)
+                            break
+        messages = filtered_messages
 
     # Sort by timestamp (oldest first)
     messages.sort(key=lambda m: m['timestamp'])

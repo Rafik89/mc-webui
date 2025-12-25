@@ -12,11 +12,9 @@ let availableChannels = [];  // List of channels from API
 let lastSeenTimestamps = {};  // Track last seen message timestamp per channel
 let unreadCounts = {};  // Track unread message counts per channel
 
-// DM state
+// DM state (for badge updates on main page)
 let dmLastSeenTimestamps = {};  // Track last seen DM timestamp per conversation
 let dmUnreadCounts = {};  // Track unread DM counts per conversation
-let currentDmConversation = null;  // Currently open DM conversation ID
-let currentDmRecipient = null;  // Current DM recipient name
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
@@ -229,40 +227,6 @@ function setupEventListeners() {
         showNotification('QR scanning feature coming soon! For now, manually enter the channel details.', 'info');
     });
 
-    // DM Modal - load conversations when opened
-    const dmModal = document.getElementById('dmModal');
-    if (dmModal) {
-        dmModal.addEventListener('show.bs.modal', function() {
-            loadDmConversations();
-            closeDmThread();  // Reset to conversation list view
-        });
-    }
-
-    // DM send form
-    const dmSendForm = document.getElementById('dmSendForm');
-    if (dmSendForm) {
-        dmSendForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            await sendDmMessage();
-        });
-    }
-
-    // DM message input - character counter
-    const dmInput = document.getElementById('dmMessageInput');
-    if (dmInput) {
-        dmInput.addEventListener('input', function() {
-            updateDmCharCounter();
-        });
-
-        // Handle Enter key
-        dmInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendDmMessage();
-            }
-        });
-    }
-
     // Network Commands: Advert button
     document.getElementById('advertBtn').addEventListener('click', async function() {
         await executeSpecialCommand('advert');
@@ -383,7 +347,7 @@ function createMessageElement(msg) {
                 <button class="btn btn-outline-secondary btn-sm btn-reply" onclick="replyTo('${escapeHtml(msg.sender)}')">
                     <i class="bi bi-reply"></i> Reply
                 </button>
-                <button class="btn btn-outline-primary btn-sm btn-dm" onclick="startDmTo('${escapeHtml(msg.sender)}')">
+                <button class="btn btn-outline-secondary btn-sm btn-reply" onclick="startDmTo('${escapeHtml(msg.sender)}')">
                     <i class="bi bi-envelope"></i> DM
                 </button>
             </div>
@@ -1232,261 +1196,12 @@ function saveDmLastSeenTimestamps() {
 }
 
 /**
- * Load DM conversations list
- */
-async function loadDmConversations() {
-    const listEl = document.getElementById('dmConversationList');
-    if (!listEl) return;
-
-    listEl.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading...</div>';
-
-    try {
-        const response = await fetch('/api/dm/conversations?days=7');
-        const data = await response.json();
-
-        if (data.success) {
-            displayDmConversations(data.conversations);
-        } else {
-            listEl.innerHTML = '<div class="text-center text-danger py-4">Error loading conversations</div>';
-        }
-    } catch (error) {
-        console.error('Error loading DM conversations:', error);
-        listEl.innerHTML = '<div class="text-center text-danger py-4">Failed to load conversations</div>';
-    }
-}
-
-/**
- * Display DM conversations list
- */
-function displayDmConversations(conversations) {
-    const listEl = document.getElementById('dmConversationList');
-    if (!listEl) return;
-
-    if (!conversations || conversations.length === 0) {
-        listEl.innerHTML = `
-            <div class="dm-empty-state">
-                <i class="bi bi-envelope"></i>
-                <p class="mb-1">No direct messages yet</p>
-                <small class="text-muted">Start a conversation by clicking DM on any message</small>
-            </div>
-        `;
-        return;
-    }
-
-    listEl.innerHTML = conversations.map(conv => {
-        const lastSeen = dmLastSeenTimestamps[conv.conversation_id] || 0;
-        const isUnread = conv.last_message_timestamp > lastSeen;
-
-        return `
-            <div class="dm-conversation-item ${isUnread ? 'unread' : ''}"
-                 onclick="openDmThread('${escapeHtml(conv.conversation_id)}', '${escapeHtml(conv.display_name)}')">
-                <div class="d-flex justify-content-between align-items-start">
-                    <strong>${escapeHtml(conv.display_name)}</strong>
-                    <small class="text-muted">${formatTime(conv.last_message_timestamp)}</small>
-                </div>
-                <div class="dm-preview">${escapeHtml(conv.last_message_preview)}</div>
-                ${isUnread ? '<span class="badge bg-primary mt-1">New</span>' : ''}
-            </div>
-        `;
-    }).join('');
-}
-
-/**
- * Open a specific DM thread
- */
-async function openDmThread(conversationId, displayName) {
-    currentDmConversation = conversationId;
-    currentDmRecipient = displayName;
-
-    // Show thread view, hide conversation list
-    document.getElementById('dmConversationList').style.display = 'none';
-    document.getElementById('dmThread').style.display = 'block';
-    document.getElementById('dmThreadRecipient').textContent = displayName;
-
-    // Clear input
-    const input = document.getElementById('dmMessageInput');
-    if (input) {
-        input.value = '';
-        updateDmCharCounter();
-    }
-
-    await loadDmMessages(conversationId);
-}
-
-/**
- * Close DM thread, return to conversation list
- */
-function closeDmThread() {
-    currentDmConversation = null;
-    currentDmRecipient = null;
-
-    const threadEl = document.getElementById('dmThread');
-    const listEl = document.getElementById('dmConversationList');
-
-    if (threadEl) threadEl.style.display = 'none';
-    if (listEl) listEl.style.display = 'block';
-}
-
-/**
- * Load DM messages for a conversation
- */
-async function loadDmMessages(conversationId) {
-    const listEl = document.getElementById('dmMessagesList');
-    if (!listEl) return;
-
-    listEl.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>';
-
-    try {
-        const response = await fetch(`/api/dm/messages?conversation_id=${encodeURIComponent(conversationId)}&limit=100`);
-        const data = await response.json();
-
-        if (data.success) {
-            displayDmMessages(data.messages);
-
-            // Update recipient name if we got a better one
-            if (data.display_name && data.display_name !== 'Unknown') {
-                currentDmRecipient = data.display_name;
-                document.getElementById('dmThreadRecipient').textContent = data.display_name;
-            }
-
-            // Mark conversation as read
-            if (data.messages && data.messages.length > 0) {
-                const latestTs = Math.max(...data.messages.map(m => m.timestamp));
-                markDmAsRead(conversationId, latestTs);
-            }
-        } else {
-            listEl.innerHTML = '<div class="text-center text-danger py-4">Error loading messages</div>';
-        }
-    } catch (error) {
-        console.error('Error loading DM messages:', error);
-        listEl.innerHTML = '<div class="text-center text-danger py-4">Failed to load messages</div>';
-    }
-}
-
-/**
- * Display DM messages in thread view
- */
-function displayDmMessages(messages) {
-    const listEl = document.getElementById('dmMessagesList');
-    if (!listEl) return;
-
-    if (!messages || messages.length === 0) {
-        listEl.innerHTML = `
-            <div class="dm-empty-state">
-                <i class="bi bi-chat-dots"></i>
-                <p>No messages in this conversation</p>
-            </div>
-        `;
-        return;
-    }
-
-    listEl.innerHTML = '';
-
-    messages.forEach(msg => {
-        const div = document.createElement('div');
-        div.className = `dm-message ${msg.is_own ? 'own' : 'other'}`;
-
-        // Status icon for own messages
-        let statusIcon = '';
-        if (msg.is_own && msg.status) {
-            const icons = {
-                'pending': '<i class="bi bi-clock dm-status pending" title="Sending..."></i>',
-                'delivered': '<i class="bi bi-check2 dm-status delivered" title="Delivered"></i>',
-                'timeout': '<i class="bi bi-x-circle dm-status timeout" title="Not delivered"></i>'
-            };
-            statusIcon = icons[msg.status] || '';
-        }
-
-        // Metadata for incoming messages
-        let meta = '';
-        if (!msg.is_own) {
-            const parts = [];
-            if (msg.snr !== null && msg.snr !== undefined) {
-                parts.push(`SNR: ${msg.snr.toFixed(1)}`);
-            }
-            if (msg.path_len !== null && msg.path_len !== undefined) {
-                parts.push(`Hops: ${msg.path_len}`);
-            }
-            if (parts.length > 0) {
-                meta = `<div class="dm-meta">${parts.join(' | ')}</div>`;
-            }
-        }
-
-        div.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center" style="font-size: 0.7rem;">
-                <span class="text-muted">${formatTime(msg.timestamp)}</span>
-                ${statusIcon}
-            </div>
-            <div>${escapeHtml(msg.content)}</div>
-            ${meta}
-        `;
-
-        listEl.appendChild(div);
-    });
-
-    // Scroll to bottom
-    listEl.scrollTop = listEl.scrollHeight;
-}
-
-/**
- * Send a DM message
- */
-async function sendDmMessage() {
-    const input = document.getElementById('dmMessageInput');
-    if (!input) return;
-
-    const text = input.value.trim();
-    if (!text || !currentDmRecipient) return;
-
-    const submitBtn = document.querySelector('#dmSendForm button[type="submit"]');
-    if (submitBtn) submitBtn.disabled = true;
-
-    try {
-        const response = await fetch('/api/dm/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recipient: currentDmRecipient,
-                text: text
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            input.value = '';
-            updateDmCharCounter();
-            showNotification('DM sent', 'success');
-
-            // Reload messages after short delay
-            if (currentDmConversation) {
-                setTimeout(() => loadDmMessages(currentDmConversation), 1000);
-            }
-        } else {
-            showNotification('Failed to send DM: ' + data.error, 'danger');
-        }
-    } catch (error) {
-        console.error('Error sending DM:', error);
-        showNotification('Failed to send DM', 'danger');
-    } finally {
-        if (submitBtn) submitBtn.disabled = false;
-        input.focus();
-    }
-}
-
-/**
  * Start DM from channel message (DM button click)
+ * Redirects to the full-page DM view
  */
 function startDmTo(username) {
-    // Open DM modal
-    const modal = new bootstrap.Modal(document.getElementById('dmModal'));
-    modal.show();
-
-    // Open thread view for this user
     const conversationId = `name_${username}`;
-    setTimeout(() => {
-        openDmThread(conversationId, username);
-    }, 300);  // Small delay for modal animation
+    window.location.href = `/dm?conversation=${encodeURIComponent(conversationId)}`;
 }
 
 /**
@@ -1568,38 +1283,3 @@ function updateDmBadges(totalUnread) {
     }
 }
 
-/**
- * Mark DM conversation as read
- */
-function markDmAsRead(conversationId, timestamp) {
-    dmLastSeenTimestamps[conversationId] = timestamp;
-    dmUnreadCounts[conversationId] = 0;
-    saveDmLastSeenTimestamps();
-
-    // Recalculate total unread
-    const totalUnread = Object.values(dmUnreadCounts).reduce((sum, count) => sum + count, 0);
-    updateDmBadges(totalUnread);
-}
-
-/**
- * Update DM character counter
- */
-function updateDmCharCounter() {
-    const input = document.getElementById('dmMessageInput');
-    const counter = document.getElementById('dmCharCounter');
-    if (!input || !counter) return;
-
-    const encoder = new TextEncoder();
-    const byteLength = encoder.encode(input.value).length;
-    counter.textContent = byteLength;
-
-    // Visual warning
-    if (byteLength > 180) {
-        counter.classList.add('text-danger');
-    } else if (byteLength > 150) {
-        counter.classList.remove('text-danger');
-        counter.classList.add('text-warning');
-    } else {
-        counter.classList.remove('text-danger', 'text-warning');
-    }
-}
