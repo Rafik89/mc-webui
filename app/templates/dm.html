@@ -57,6 +57,13 @@
                 max-width: 100%;
             }
         }
+
+        /* PWA safe area handling - ensure bottom UI is visible above system bars */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            body {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
     </style>
 </head>
 <body>

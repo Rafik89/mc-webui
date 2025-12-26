@@ -15,6 +15,14 @@ let lastMessageTimestamp = 0;  // Track latest message timestamp for smart refre
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('DM page initialized');
 
+    // Force viewport recalculation on PWA navigation
+    // This fixes the bottom bar visibility issue when navigating from main page
+    window.scrollTo(0, 0);
+    // Trigger resize event to force browser to recalculate viewport height
+    window.dispatchEvent(new Event('resize'));
+    // Force reflow to ensure proper layout calculation
+    document.body.offsetHeight;
+
     // Load last seen timestamps from localStorage
     loadDmLastSeenTimestamps();
 
@@ -38,6 +46,30 @@ document.addEventListener('DOMContentLoaded', async function() {
     setupAutoRefresh();
 
     updateStatus('connected', 'Ready');
+});
+
+// Handle page restoration from cache (PWA back/forward navigation)
+window.addEventListener('pageshow', function(event) {
+    if (event.persisted) {
+        // Page was restored from cache, force viewport recalculation
+        console.log('Page restored from cache, recalculating viewport');
+        window.scrollTo(0, 0);
+        window.dispatchEvent(new Event('resize'));
+        document.body.offsetHeight;
+    }
+});
+
+// Handle app returning from background (PWA visibility change)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // App became visible again, force viewport recalculation
+        console.log('App became visible, recalculating viewport');
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            window.dispatchEvent(new Event('resize'));
+            document.body.offsetHeight;
+        }, 100);
+    }
 });
 
 /**
