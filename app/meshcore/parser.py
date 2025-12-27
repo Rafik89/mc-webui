@@ -314,71 +314,38 @@ def delete_channel_messages(channel_idx: int) -> bool:
 # Direct Messages (DM) Parsing
 # =============================================================================
 #
-# Note: meshcore-cli has a bug where SENT_MSG entries contain the sender's
-# device name instead of the recipient's name. To work around this, we maintain
-# our own sent DM log file with correct recipient information.
-# See: https://github.com/liamcottle/meshcore-cli/issues/XXX
+# Requires meshcore-cli >= 1.3.12 for correct SENT_MSG format with recipient field.
+#
+# Message types:
+# - PRIV: Incoming private messages (from others to us)
+# - SENT_MSG: Outgoing private messages (from us to others) - txt_type=0 for DM
 # =============================================================================
 
-def save_sent_dm(recipient: str, text: str) -> bool:
+# Global flag to track if cleanup has been performed
+_dm_cleanup_done = False
+
+
+def _cleanup_old_dm_sent_log() -> None:
     """
-    Save a sent DM to our own log file (workaround for meshcore-cli bug).
+    Clean up the old _dm_sent.jsonl file that was used as a workaround
+    for meshcore-cli 1.3.11 bug. This file is no longer needed with 1.3.12+.
 
-    Args:
-        recipient: Contact name the message was sent to
-        text: Message content
-
-    Returns:
-        True if saved successfully, False otherwise
+    This function is called once at the first read_dm_messages() invocation.
     """
-    dm_log_file = config.dm_sent_log_path
+    global _dm_cleanup_done
 
-    entry = {
-        'timestamp': int(time.time()),
-        'recipient': recipient,
-        'text': text,
-        'status': 'pending'
-    }
+    if _dm_cleanup_done:
+        return
 
     try:
-        with open(dm_log_file, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + '\n')
-        logger.info(f"Saved sent DM to {recipient}")
-        return True
+        dm_log_file = Path(config.MC_CONFIG_DIR) / f"{config.MC_DEVICE_NAME}_dm_sent.jsonl"
+        if dm_log_file.exists():
+            dm_log_file.unlink()
+            logger.info(f"Cleaned up old DM sent log: {dm_log_file}")
     except Exception as e:
-        logger.error(f"Error saving sent DM: {e}")
-        return False
-
-
-def _read_sent_dm_log() -> List[Dict]:
-    """
-    Read sent DMs from our own log file.
-
-    Returns:
-        List of sent DM entries
-    """
-    dm_log_file = config.dm_sent_log_path
-
-    if not dm_log_file.exists():
-        return []
-
-    entries = []
-    try:
-        with open(dm_log_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                    entries.append(data)
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Invalid JSON in DM log at line {line_num}: {e}")
-                    continue
-    except Exception as e:
-        logger.error(f"Error reading sent DM log: {e}")
-
-    return entries
+        logger.warning(f"Could not clean up old DM sent log: {e}")
+    finally:
+        _dm_cleanup_done = True
 
 
 def _parse_priv_message(line: Dict) -> Optional[Dict]:
@@ -428,22 +395,32 @@ def _parse_priv_message(line: Dict) -> Optional[Dict]:
     }
 
 
-def _parse_sent_dm_entry(entry: Dict) -> Optional[Dict]:
+def _parse_sent_msg(line: Dict) -> Optional[Dict]:
     """
-    Parse a sent DM entry from our own log file.
+    Parse outgoing private message (SENT_MSG type) from meshcore-cli 1.3.12+.
+
+    This function parses SENT_MSG entries from the .msgs file. As of meshcore-cli 1.3.12,
+    these entries now correctly include both 'recipient' and 'sender' fields.
 
     Args:
-        entry: Entry from our dm_sent.jsonl file
+        line: Raw JSON object from .msgs file with type='SENT_MSG'
 
     Returns:
-        Parsed DM dict or None if invalid
+        Parsed DM dict or None if invalid or not a private message
     """
-    text = entry.get('text', '').strip()
+    text = line.get('text', '').strip()
     if not text:
         return None
 
-    timestamp = entry.get('timestamp', 0)
-    recipient = entry.get('recipient', 'Unknown')
+    # Check txt_type - only process private messages (0), not channel messages (1)
+    txt_type = line.get('txt_type', 0)
+    if txt_type != 0:
+        return None
+
+    timestamp = line.get('timestamp', 0)
+    # Use 'recipient' field (added in meshcore-cli 1.3.12), fallback to 'name'
+    recipient = line.get('recipient', line.get('name', 'Unknown'))
+    sender = line.get('sender', config.MC_DEVICE_NAME)
 
     # Generate conversation ID from recipient name
     conversation_id = f"name_{recipient}"
@@ -452,18 +429,16 @@ def _parse_sent_dm_entry(entry: Dict) -> Optional[Dict]:
     text_hash = hash(text[:50]) & 0xFFFFFFFF
     dedup_key = f"sent_{timestamp}_{text_hash}"
 
-    # Keep the status from log file (pending by default, no ACK tracking available)
-    status = entry.get('status', 'pending')
-
     return {
         'type': 'dm',
         'direction': 'outgoing',
         'recipient': recipient,
+        'sender': sender,
         'content': text,
         'timestamp': timestamp,
         'datetime': datetime.fromtimestamp(timestamp).isoformat() if timestamp > 0 else None,
         'is_own': True,
-        'status': status,
+        'txt_type': txt_type,
         'conversation_id': conversation_id,
         'dedup_key': dedup_key
     }
@@ -475,10 +450,9 @@ def read_dm_messages(
     days: Optional[int] = 7
 ) -> Tuple[List[Dict], Dict[str, str]]:
     """
-    Read and parse DM messages from .msgs file (incoming) and our sent DM log (outgoing).
+    Read and parse DM messages from .msgs file (both incoming PRIV and outgoing SENT_MSG).
 
-    Note: We ignore SENT_MSG entries from .msgs because they have the wrong recipient
-    due to a bug in meshcore-cli.
+    Requires meshcore-cli >= 1.3.12 for correct SENT_MSG format with recipient field.
 
     Args:
         limit: Maximum messages to return (None = all)
@@ -493,7 +467,10 @@ def read_dm_messages(
     seen_dedup_keys = set()
     pubkey_to_name = {}  # Map pubkey_prefix -> most recent name
 
-    # --- Read incoming messages (PRIV) from .msgs file ---
+    # Clean up old DM sent log file (once per session)
+    _cleanup_old_dm_sent_log()
+
+    # --- Read DM messages from .msgs file ---
     msgs_file = config.msgs_file_path
     if msgs_file.exists():
         try:
@@ -505,17 +482,21 @@ def read_dm_messages(
 
                     try:
                         data = json.loads(line)
+                        msg_type = data.get('type')
 
-                        # Only process PRIV messages (incoming DMs)
-                        if data.get('type') != 'PRIV':
-                            continue
+                        # Process PRIV (incoming) and SENT_MSG (outgoing) messages
+                        if msg_type == 'PRIV':
+                            parsed = _parse_priv_message(data)
+                        elif msg_type == 'SENT_MSG':
+                            parsed = _parse_sent_msg(data)
+                        else:
+                            continue  # Ignore other message types
 
-                        parsed = _parse_priv_message(data)
                         if not parsed:
                             continue
 
-                        # Update pubkey->name mapping
-                        if parsed.get('pubkey_prefix'):
+                        # Update pubkey->name mapping (only for PRIV messages)
+                        if msg_type == 'PRIV' and parsed.get('pubkey_prefix'):
                             pubkey_to_name[parsed['pubkey_prefix']] = parsed['sender']
 
                         # Deduplicate
@@ -529,25 +510,11 @@ def read_dm_messages(
                         logger.warning(f"Invalid JSON at line {line_num}: {e}")
                         continue
                     except Exception as e:
-                        logger.error(f"Error parsing DM at line {line_num}: {e}")
+                        logger.error(f"Error parsing message at line {line_num}: {e}")
                         continue
 
         except Exception as e:
             logger.error(f"Error reading messages file: {e}")
-
-    # --- Read sent DMs from our own log file ---
-    sent_entries = _read_sent_dm_log()
-    for entry in sent_entries:
-        parsed = _parse_sent_dm_entry(entry)
-        if not parsed:
-            continue
-
-        # Deduplicate
-        if parsed['dedup_key'] in seen_dedup_keys:
-            continue
-        seen_dedup_keys.add(parsed['dedup_key'])
-
-        messages.append(parsed)
 
     # --- Filter by conversation if specified ---
     if conversation_id:

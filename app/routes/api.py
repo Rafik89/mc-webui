@@ -1069,9 +1069,6 @@ def send_dm_message():
         success, message = cli.send_dm(recipient, text)
 
         if success:
-            # Save to our own sent DM log (workaround for meshcore-cli bug)
-            parser.save_sent_dm(recipient, text)
-
             return jsonify({
                 'success': True,
                 'message': 'DM sent',
