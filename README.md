@@ -1,3 +1,4 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 # mc-webui
 
 A lightweight web interface for meshcore-cli, providing browser-based access to MeshCore mesh network.
@@ -400,11 +401,12 @@ This is an open-source project. Contributions are welcome!
 
 ## License
 
-[License TBD]
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## References
 
 - [MeshCore Documentation](https://meshcore.org)
 - [meshcore-cli GitHub](https://github.com/meshcore-dev/meshcore-cli)
 
-
+## Contact
+<img src="images/MarWoj_card_QR.png" alt="meshcore://11009cebbd2744d33c94b980b8f2475241fd2ca6165bd623e5ef00ec6982be6a1784a5434566772eccc26723ea5c3a1b6ccf03725b583f60121eb2bbe21ead23ab1bd96b7e83b215bf4379b4722a85de2ef25187e17e0bd5a1bd7c55c4cfbf2599f719629701814d6172576f6a" width="200px">
