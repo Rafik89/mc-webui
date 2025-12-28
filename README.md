@@ -88,7 +88,7 @@ All configuration is done via environment variables in the `.env` file:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MC_SERIAL_PORT` | Path to serial device | `/dev/ttyUSB0` |
-| `MC_DEVICE_NAME` | Device name (for .msgs file) | `MeshCore` |
+| `MC_DEVICE_NAME` | Device name (for .msgs and .adverts.jsonl files) | `MeshCore` |
 | `MC_CONFIG_DIR` | meshcore configuration directory | `/root/.config/meshcore` |
 | `MC_REFRESH_INTERVAL` | Auto-refresh interval (seconds) | `60` |
 | `MC_INACTIVE_HOURS` | Inactivity threshold for cleanup | `48` |
@@ -98,6 +98,7 @@ All configuration is done via environment variables in the `.env` file:
 | `FLASK_HOST` | Listen address | `0.0.0.0` |
 | `FLASK_PORT` | Application port | `5000` |
 | `FLASK_DEBUG` | Debug mode | `false` |
+| `TZ` | Timezone for container logs | `UTC` |
 
 See [.env.example](.env.example) for a complete example.
 
@@ -106,9 +107,12 @@ See [.env.example](.env.example) for a complete example.
 mc-webui uses a **2-container architecture** for improved USB stability:
 
 1. **meshcore-bridge** - Lightweight service with exclusive USB device access
-   - Runs meshcore-cli subprocess calls
+   - Maintains a **persistent meshcli session** (single long-lived process)
+   - Multiplexes stdout: JSON adverts → `.adverts.jsonl` log, CLI commands → HTTP responses
+   - Real-time message reception via `msgs_subscribe` (no polling)
+   - Thread-safe command queue with event-based synchronization
+   - Watchdog thread for automatic crash recovery
    - Exposes HTTP API on port 5001 (internal only)
-   - Automatically restarts on USB communication issues
 
 2. **mc-webui** - Main web application
    - Flask-based web interface
@@ -116,6 +120,21 @@ mc-webui uses a **2-container architecture** for improved USB stability:
    - No direct USB access (prevents device locking)
 
 This separation solves USB timeout/deadlock issues common in Docker + VM environments.
+
+### Bridge Session Architecture
+
+The meshcore-bridge maintains a **single persistent meshcli session** instead of spawning new processes per request:
+
+- **Single subprocess.Popen** - One long-lived meshcli process with stdin/stdout pipes
+- **Multiplexing** - Intelligently routes output:
+  - JSON adverts (with `payload_typename: "ADVERT"`) → logged to `{device_name}.adverts.jsonl`
+  - CLI command responses → returned via HTTP API
+- **Real-time messages** - `msgs_subscribe` command enables instant message reception without polling
+- **Thread-safe queue** - Commands are serialized through a queue.Queue for FIFO execution
+- **Timeout-based detection** - Response completion detected when no new lines arrive for 300ms
+- **Auto-restart watchdog** - Monitors process health and restarts on crash
+
+This architecture enables advanced features like pending contact management (`manual_add_contacts`) and provides better stability and performance.
 
 ## Project Structure
 
