@@ -100,12 +100,9 @@ def send_message(text: str, reply_to: Optional[str] = None, channel_index: int =
     else:
         message = text
 
-    if channel_index == 0:
-        # Public channel - backward compatibility
-        success, stdout, stderr = _run_command(['public', message])
-    else:
-        # Other channels - use 'chan' command
-        success, stdout, stderr = _run_command(['chan', str(channel_index), message])
+    # Use 'chan' command for all channels (including Public/0) for consistent quoting behavior
+    # Note: 'public' command treats quotes literally, while 'chan' properly parses them as delimiters
+    success, stdout, stderr = _run_command(['chan', str(channel_index), message])
 
     return success, stdout or stderr
 
