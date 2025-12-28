@@ -125,10 +125,11 @@ def parse_contacts(output: str) -> List[str]:
     """
     Parse meshcli contacts output to extract contact names.
 
-    Expected formats:
-    - "ContactName" (simple list)
-    - "ContactName (type)" (with type info)
-    - Any line containing contact information
+    Expected format from meshcli contacts:
+    ContactName                    CLI   pubkey_prefix  path
+    ContactName 🔫                 CLI   pubkey_prefix  path
+
+    Contact name is separated from type column (CLI/REP/ROOM/SENS) by multiple spaces.
 
     Args:
         output: Raw output from meshcli contacts command
@@ -139,19 +140,28 @@ def parse_contacts(output: str) -> List[str]:
     contacts = []
 
     for line in output.split('\n'):
-        line = line.strip()
+        line_stripped = line.strip()
 
-        # Skip empty lines and potential headers
-        if not line or line.startswith('---') or line.lower().startswith('contact'):
+        # Skip empty lines, headers, and INFO lines
+        if not line_stripped or line_stripped.startswith('---') or \
+           line.lower().startswith('contact') or line.startswith('INFO:'):
             continue
 
-        # Extract contact name (before parentheses or special chars)
-        # Handle formats like "ContactName" or "ContactName (type)"
-        name_match = re.match(r'^([^\s()\[\]]+)', line)
-        if name_match:
-            contact_name = name_match.group(1).strip()
-            if contact_name and contact_name not in contacts:
-                contacts.append(contact_name)
+        # Split by 2+ consecutive spaces (columns separator in meshcli output)
+        # Format: "ContactName         CLI   pubkey  path"
+        parts = re.split(r'\s{2,}', line)
+
+        if len(parts) >= 2:
+            # First part is the contact name (may include emoji and spaces)
+            contact_name = parts[0].strip()
+
+            # Second part should be type (CLI, REP, ROOM, SENS)
+            contact_type = parts[1].strip()
+
+            # Validate that second column looks like a type
+            if contact_type in ['CLI', 'REP', 'ROOM', 'SENS'] and contact_name:
+                if contact_name not in contacts:
+                    contacts.append(contact_name)
 
     return contacts
 
