@@ -269,6 +269,7 @@ Access the Direct Messages feature:
 **From channel messages:**
 - Click the "DM" button next to any message to start a private chat with that user
 - You'll be redirected to the DM page with that conversation selected
+- **Note:** The DM button is only visible for users who are in your contacts list (meshcli: `contacts`). This ensures that direct messages will actually be delivered to the recipient.
 
 **Using the DM page:**
 1. Select a conversation from the dropdown at the top (or one opens automatically if started from a message)

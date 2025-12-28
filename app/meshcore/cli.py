@@ -121,6 +121,57 @@ def get_contacts() -> Tuple[bool, str]:
     return success, stdout or stderr
 
 
+def parse_contacts(output: str) -> List[str]:
+    """
+    Parse meshcli contacts output to extract contact names.
+
+    Expected formats:
+    - "ContactName" (simple list)
+    - "ContactName (type)" (with type info)
+    - Any line containing contact information
+
+    Args:
+        output: Raw output from meshcli contacts command
+
+    Returns:
+        List of contact names (unique)
+    """
+    contacts = []
+
+    for line in output.split('\n'):
+        line = line.strip()
+
+        # Skip empty lines and potential headers
+        if not line or line.startswith('---') or line.lower().startswith('contact'):
+            continue
+
+        # Extract contact name (before parentheses or special chars)
+        # Handle formats like "ContactName" or "ContactName (type)"
+        name_match = re.match(r'^([^\s()\[\]]+)', line)
+        if name_match:
+            contact_name = name_match.group(1).strip()
+            if contact_name and contact_name not in contacts:
+                contacts.append(contact_name)
+
+    return contacts
+
+
+def get_contacts_list() -> Tuple[bool, List[str], str]:
+    """
+    Get parsed list of contact names from the device.
+
+    Returns:
+        Tuple of (success, contact_names_list, error_message)
+    """
+    success, output = get_contacts()
+
+    if not success:
+        return False, [], output
+
+    contacts = parse_contacts(output)
+    return True, contacts, ""
+
+
 def clean_inactive_contacts(hours: int = 48) -> Tuple[bool, str]:
     """
     Remove contacts inactive for specified hours.
