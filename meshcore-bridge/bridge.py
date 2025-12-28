@@ -18,6 +18,7 @@ import time
 import json
 import queue
 import uuid
+import shlex
 from pathlib import Path
 from flask import Flask, request, jsonify
 
@@ -325,7 +326,8 @@ class MeshCLISession:
             Dict with success, stdout, stderr, returncode
         """
         cmd_id = str(uuid.uuid4())[:8]
-        command = ' '.join(args)
+        # Properly quote arguments containing spaces/special chars
+        command = ' '.join(shlex.quote(arg) for arg in args)
         event = threading.Event()
         response_dict = {
             "event": event,
