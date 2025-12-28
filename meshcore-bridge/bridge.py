@@ -18,7 +18,6 @@ import time
 import json
 import queue
 import uuid
-import shlex
 from pathlib import Path
 from flask import Flask, request, jsonify
 
@@ -74,13 +73,9 @@ class MeshCLISession:
         self.stderr_thread = None
         self.stdin_thread = None
         self.watchdog_thread = None
-        self.auto_recv_thread = None
 
         # Shutdown flag
         self.shutdown_flag = threading.Event()
-
-        # Auto-recv interval (seconds) - periodic message sync
-        self.auto_recv_interval = 30
 
         # Start session
         self._start_session()
@@ -114,9 +109,6 @@ class MeshCLISession:
             self.watchdog_thread = threading.Thread(target=self._watchdog, daemon=True, name="watchdog")
             self.watchdog_thread.start()
 
-            self.auto_recv_thread = threading.Thread(target=self._auto_recv, daemon=True, name="auto-recv")
-            self.auto_recv_thread.start()
-
             # Initialize session settings
             time.sleep(0.5)  # Let meshcli initialize
             self._init_session_settings()
@@ -128,7 +120,7 @@ class MeshCLISession:
             raise
 
     def _init_session_settings(self):
-        """Configure meshcli session for advert logging"""
+        """Configure meshcli session for advert logging and message subscription"""
         logger.info("Configuring meshcli session settings")
 
         # Send configuration commands directly to stdin (bypass queue for init)
@@ -136,8 +128,9 @@ class MeshCLISession:
             try:
                 self.process.stdin.write('set json_log_rx on\n')
                 self.process.stdin.write('set print_adverts on\n')
+                self.process.stdin.write('msg_subscribe\n')
                 self.process.stdin.flush()
-                logger.info("Session settings applied: json_log_rx=on, print_adverts=on")
+                logger.info("Session settings applied: json_log_rx=on, print_adverts=on, msg_subscribe")
             except Exception as e:
                 logger.error(f"Failed to apply session settings: {e}")
 
@@ -283,32 +276,6 @@ class MeshCLISession:
                     time.sleep(10)  # Wait before retry
 
         logger.info("watchdog thread exiting")
-
-    def _auto_recv(self):
-        """Thread: Periodically call recv to sync messages in background"""
-        logger.info(f"auto-recv thread started (interval: {self.auto_recv_interval}s)")
-
-        # Wait a bit before first recv to let session initialize
-        time.sleep(5)
-
-        while not self.shutdown_flag.is_set():
-            try:
-                # Execute recv command via internal queue
-                logger.debug("Auto-recv: fetching new messages")
-                result = self.execute_command(['recv'], timeout=RECV_TIMEOUT)
-
-                if result['success']:
-                    logger.debug("Auto-recv: messages synced successfully")
-                else:
-                    logger.warning(f"Auto-recv failed: {result.get('stderr', 'unknown error')}")
-
-            except Exception as e:
-                logger.error(f"Auto-recv error: {e}")
-
-            # Wait for next interval (or until shutdown)
-            self.shutdown_flag.wait(self.auto_recv_interval)
-
-        logger.info("auto-recv thread exiting")
 
     def _is_advert_json(self, line):
         """Check if line is a JSON advert"""
