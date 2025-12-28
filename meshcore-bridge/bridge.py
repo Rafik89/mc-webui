@@ -178,7 +178,7 @@ class MeshCLISession:
             logger.info("stderr reader thread exiting")
 
     def _send_commands(self):
-        """Thread: Send queued commands to stdin with markers"""
+        """Thread: Send queued commands to stdin and monitor responses"""
         logger.info("stdin writer thread started")
 
         try:
@@ -195,13 +195,20 @@ class MeshCLISession:
                 with self.pending_lock:
                     self.pending_commands[cmd_id] = response_dict
                     self.current_cmd_id = cmd_id
+                    response_dict["last_line_time"] = time.time()
 
                 try:
-                    # Send command + end marker
+                    # Send command
                     self.process.stdin.write(f'{command}\n')
-                    marker = f'echo "___END_{cmd_id}___"'
-                    self.process.stdin.write(f'{marker}\n')
                     self.process.stdin.flush()
+
+                    # Start timeout monitor thread
+                    monitor_thread = threading.Thread(
+                        target=self._monitor_response_timeout,
+                        args=(cmd_id, response_dict, event),
+                        daemon=True
+                    )
+                    monitor_thread.start()
 
                 except Exception as e:
                     logger.error(f"Failed to send command [{cmd_id}]: {e}")
@@ -214,6 +221,32 @@ class MeshCLISession:
             logger.error(f"stdin writer error: {e}")
         finally:
             logger.info("stdin writer thread exiting")
+
+    def _monitor_response_timeout(self, cmd_id, response_dict, event, timeout_ms=300):
+        """Monitor if response has finished (no new lines for timeout_ms)"""
+        try:
+            while not self.shutdown_flag.is_set():
+                time.sleep(timeout_ms / 1000.0)
+
+                with self.pending_lock:
+                    # Check if command still pending
+                    if cmd_id not in self.pending_commands:
+                        return  # Already completed
+
+                    # Check if we got new lines recently
+                    time_since_last_line = time.time() - response_dict.get("last_line_time", 0)
+
+                    if time_since_last_line >= (timeout_ms / 1000.0):
+                        # No new lines for timeout period - mark as done
+                        logger.info(f"Command [{cmd_id}] completed (timeout-based)")
+                        response_dict["done"] = True
+                        event.set()
+                        if self.current_cmd_id == cmd_id:
+                            self.current_cmd_id = None
+                        return
+
+        except Exception as e:
+            logger.error(f"Monitor thread error for [{cmd_id}]: {e}")
 
     def _watchdog(self):
         """Thread: Monitor process health and restart if crashed"""
@@ -266,7 +299,7 @@ class MeshCLISession:
             logger.error(f"Failed to log advert: {e}")
 
     def _append_to_current_response(self, line):
-        """Append line to current CLI command response or detect end marker"""
+        """Append line to current CLI command response and update timestamp"""
         with self.pending_lock:
             if not self.current_cmd_id:
                 # No active command, probably init output - log and ignore
@@ -275,15 +308,10 @@ class MeshCLISession:
 
             cmd_id = self.current_cmd_id
 
-            # Check for end marker
-            if line.startswith("___END_") and line.endswith("___"):
-                logger.info(f"Command [{cmd_id}] completed")
-                self.pending_commands[cmd_id]["done"] = True
-                self.pending_commands[cmd_id]["event"].set()
-                self.current_cmd_id = None
-            else:
-                # Append to response buffer
-                self.pending_commands[cmd_id]["response"].append(line)
+            # Append to response buffer
+            self.pending_commands[cmd_id]["response"].append(line)
+            # Update timestamp of last received line
+            self.pending_commands[cmd_id]["last_line_time"] = time.time()
 
     def execute_command(self, args, timeout=DEFAULT_TIMEOUT):
         """
@@ -303,7 +331,8 @@ class MeshCLISession:
             "event": event,
             "response": [],
             "done": False,
-            "error": None
+            "error": None,
+            "last_line_time": time.time()
         }
 
         # Queue command
