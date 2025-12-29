@@ -549,42 +549,63 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
     """
     try:
         # Execute command to get all contact types
+        # Call separately for each type since commas might not work through bridge
         # t=1 (CLI), t=2 (REP), t=3 (ROOM), t=4 (SENS)
-        success, stdout, stderr = _run_command(['apply_to', 't=1,t=2,t=3,t=4', 'contact_info'])
 
-        if not success:
-            logger.error(f"apply_to contact_info failed: {stderr}")
-            return False, {}, stderr or 'Failed to get contact details'
+        contacts_dict = {}
 
-        logger.info(f"apply_to contact_info returned {len(stdout)} bytes")
+        for contact_type in ['t=1', 't=2', 't=3', 't=4']:
+            success, stdout, stderr = _run_command(['apply_to', contact_type, 'contact_info'])
 
-        # Parse JSON output
-        try:
-            # The output should be a JSON array
-            contact_list = json.loads(stdout)
+            if not success:
+                logger.warning(f"apply_to {contact_type} contact_info failed: {stderr}")
+                continue  # Skip this type, try next
 
-            if not isinstance(contact_list, list):
-                logger.error(f"Unexpected response type: {type(contact_list)}")
-                return False, {}, 'Unexpected response format (expected JSON array)'
+            logger.info(f"apply_to {contact_type} contact_info returned {len(stdout)} bytes")
 
-            logger.info(f"Parsed {len(contact_list)} contacts from JSON")
+            # Parse NDJSON output (newline-delimited JSON)
+            # Each line is a separate JSON object, except the last line which is "> N matches"
+            try:
+                lines = stdout.strip().split('\n')
+                parsed_count = 0
 
-            # Build dictionary indexed by public_key for easy lookup
-            contacts_dict = {}
-            for contact in contact_list:
-                if 'public_key' in contact:
-                    # Use full public key as index
-                    contacts_dict[contact['public_key']] = contact
-                    # Log first contact for debugging
-                    if len(contacts_dict) == 1:
-                        logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
+                for line in lines:
+                    line = line.strip()
 
-            return True, contacts_dict, ""
+                    # Skip empty lines and summary line
+                    if not line or line.startswith('>') or line.startswith('MarWoj|'):
+                        continue
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse contact_info JSON: {e}")
-            logger.error(f"Raw output (first 500 chars): {stdout[:500]}")
-            return False, {}, f'JSON parse error: {str(e)}'
+                    try:
+                        # Parse each line as a separate JSON object
+                        contact = json.loads(line)
+
+                        if 'public_key' in contact:
+                            # Use full public key as index
+                            contacts_dict[contact['public_key']] = contact
+                            parsed_count += 1
+
+                            # Log first contact for debugging
+                            if len(contacts_dict) == 1:
+                                logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
+
+                    except json.JSONDecodeError:
+                        # Skip lines that aren't valid JSON
+                        logger.debug(f"Skipping non-JSON line: {line[:50]}")
+                        continue
+
+                logger.info(f"Parsed {parsed_count} contacts from {contact_type}")
+
+            except Exception as e:
+                logger.error(f"Error parsing {contact_type} output: {e}")
+                continue
+
+        if len(contacts_dict) == 0:
+            logger.error(f"No contacts parsed from any type")
+            return False, {}, 'No contacts found in contact_info output'
+
+        logger.info(f"Total contacts collected: {len(contacts_dict)}")
+        return True, contacts_dict, ""
 
     except Exception as e:
         logger.error(f"Error getting contact details: {e}")
