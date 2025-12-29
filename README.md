@@ -358,7 +358,13 @@ The Existing Contacts section displays all contacts currently stored on your dev
   - Red (pulsing): Alarm (≥ 340 contacts)
 - **Search** - Filter contacts by name or public key prefix
 - **Type filter** - Show only specific contact types (All / CLI / REP / ROOM / SENS)
-- **Contact cards** - Display name, type badge, public key prefix, and path info
+- **Contact cards** - Display name, type badge, public key prefix, path info, and last seen timestamp
+- **Last Seen** - Shows when each contact was last active with activity indicators:
+  - 🟢 **Active** (seen < 5 minutes ago)
+  - 🟡 **Recent** (seen < 1 hour ago)
+  - 🔴 **Inactive** (seen > 1 hour ago)
+  - ⚫ **Unknown** (no timestamp available)
+  - Relative time format: "5 minutes ago", "2 hours ago", "3 days ago", etc.
 
 **Managing contacts:**
 1. **Search contacts:**

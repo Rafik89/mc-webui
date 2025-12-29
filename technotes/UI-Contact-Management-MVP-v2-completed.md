@@ -676,6 +676,458 @@ Documentation:
 Related: UI-Contact-Management-MVP-v1-completed.md
 ```
 
+## "Last Seen" Feature Implementation
+
+### Overview
+
+After completing the basic Contact Management v2, an additional enhancement was requested to show when each contact was last active. This provides valuable information about which contacts are currently reachable on the mesh network.
+
+### Requirements
+
+**User Request**: "Czy na kafelku z kontaktem możemy dodać datę 'last seen'? Czy taka informacja jest łatwo dostępna?"
+
+**Goal**: Display "last seen" timestamp on contact cards with:
+- Relative time format ("5 minutes ago", "2 hours ago", etc.)
+- Activity status indicators (🟢 active, 🟡 recent, 🔴 inactive)
+- Data fetched from meshcli's `apply_to` command with `contact_info` filter
+
+### Architecture
+
+#### Data Source Discovery
+
+Initial investigation found that `meshcli contacts` command only returns:
+- NAME
+- TYPE
+- PUBKEY_PREFIX
+- PATH_OR_MODE
+
+**No timestamp information available.**
+
+User discovered `apply_to t=TYPE contact_info` command which returns detailed JSON including:
+- `last_advert` - Unix timestamp when contact was last seen
+- `lastmod` - Unix timestamp when contact was last modified
+- Full public_key, GPS coordinates, path info, etc.
+
+**Decision**: Use `last_advert` as "last seen" timestamp (subject to future review).
+
+#### Command Syntax
+
+```bash
+# Get detailed info for all CLI contacts
+apply_to t=1 contact_info
+
+# Get detailed info for all REP contacts
+apply_to t=2 contact_info
+
+# And so on for ROOM (t=3) and SENS (t=4)
+```
+
+**Important discoveries**:
+1. **Comma-separated types DON'T WORK** through bridge: `apply_to t=1,t=2,t=3 contact_info` returns "0 matches"
+2. **Output format is NDJSON** (newline-delimited JSON), not JSON array
+3. **JSON is prettified** (multi-line), not strictly line-delimited
+4. **Must call separately for each type**: t=1, t=2, t=3, t=4
+
+#### Output Format (NDJSON)
+
+```json
+{
+  "public_key": "df2027d3f2ef45a9...",
+  "type": 2,
+  "flags": 0,
+  "out_path_len": 0,
+  "out_path": "",
+  "adv_name": "TK Zalesie Test 🦜",
+  "last_advert": 1735429453,
+  "adv_lat": 50.123456,
+  "adv_lon": 19.654321,
+  "lastmod": 1735428000
+}
+{
+  "public_key": "d103df18e0ff12ab...",
+  "type": 2,
+  ...
+}
+```
+
+### Implementation
+
+#### Backend: NDJSON Parser (`cli.py::get_contacts_with_last_seen()`)
+
+**Challenge**: Parse prettified NDJSON output where each JSON object spans multiple lines.
+
+**Failed Approach #1**: Line-by-line parsing
+```python
+# Tried to parse each line as JSON - FAILED
+# Prettified JSON breaks across multiple lines
+for line in stdout.splitlines():
+    try:
+        contact = json.loads(line)  # JSONDecodeError!
+```
+
+**Failed Approach #2**: Skip non-JSON lines
+```python
+# Tried to detect JSON lines and skip prompts - FAILED
+# Still doesn't handle multi-line JSON objects
+if line.strip().startswith('{'):
+    contact = json.loads(line)  # Still fails on prettified JSON
+```
+
+**Successful Approach #3**: Brace-matching algorithm
+```python
+def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
+    """
+    Get detailed contact information including last_advert timestamps.
+    Uses 'apply_to t=TYPE contact_info' command to fetch metadata
+    for all contact types (CLI, REP, ROOM, SENS).
+    """
+    contacts_dict = {}
+
+    # Call separately for each type (comma-separated doesn't work)
+    for contact_type in ['t=1', 't=2', 't=3', 't=4']:
+        success, stdout, stderr = _run_command(['apply_to', contact_type, 'contact_info'])
+
+        if not success:
+            logger.warning(f"apply_to {contact_type} contact_info failed: {stderr}")
+            continue
+
+        # Parse prettified JSON using brace-matching
+        json_objects = []
+        depth = 0
+        start_idx = None
+
+        # Walk character-by-character through output
+        for i, char in enumerate(stdout):
+            if char == '{':
+                if depth == 0:
+                    start_idx = i  # Mark start of JSON object
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0 and start_idx is not None:
+                    # Found complete JSON object
+                    json_str = stdout[start_idx:i+1]
+                    try:
+                        contact = json.loads(json_str)
+                        if 'public_key' in contact:
+                            json_objects.append(contact)
+                    except json.JSONDecodeError:
+                        pass  # Skip malformed JSON
+                    start_idx = None
+
+        # Add to contacts dict
+        for contact in json_objects:
+            contacts_dict[contact['public_key']] = contact
+
+        logger.info(f"Parsed {len(json_objects)} contacts from {contact_type}")
+
+    return True, contacts_dict, ""
+```
+
+**Why this works**:
+- Depth counter tracks brace nesting level
+- When depth reaches 0, we have a complete `{...}` object
+- Handles both single-line and multi-line JSON
+- Skips any prompt echoes or non-JSON text
+- Works regardless of JSON formatting
+
+**Test results**:
+- ✅ 17 CLI contacts parsed (t=1)
+- ✅ 226 REP contacts parsed (t=2)
+- ✅ 20 ROOM contacts parsed (t=3)
+- ✅ 0 SENS contacts parsed (t=4, none present)
+- **Total: 263 contacts successfully parsed**
+
+#### API Endpoint Enhancement (`api.py`)
+
+Modified `GET /api/contacts/detailed` to merge `last_seen` data:
+
+```python
+@api_bp.route('/contacts/detailed', methods=['GET'])
+def get_contacts_detailed_api():
+    # Get basic contacts list
+    success, contacts, total_count, error = cli.get_all_contacts_detailed()
+
+    # Get detailed contact info with last_advert timestamps
+    success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
+
+    if success_detailed:
+        # Merge last_advert data with contacts
+        # Match by public_key_prefix (first 12 chars of full public_key)
+        for contact in contacts:
+            prefix = contact.get('public_key_prefix', '').lower()
+
+            # Find matching contact in detailed data
+            for full_key, details in contacts_detailed.items():
+                if full_key.lower().startswith(prefix):
+                    # Add last_seen timestamp
+                    contact['last_seen'] = details.get('last_advert', None)
+                    break
+    else:
+        # If detailed fetch failed, log warning but still return contacts without last_seen
+        logger.warning(f"Failed to get last_seen data: {error_detailed}")
+
+    return jsonify({
+        'success': True,
+        'contacts': contacts,
+        'count': total_count,
+        'limit': 350
+    }), 200
+```
+
+**Matching strategy**:
+- Use `public_key_prefix` (12 hex chars) from basic contacts list
+- Match against full `public_key` from detailed data using `startswith()`
+- Fallback gracefully if detailed fetch fails (contacts still shown without timestamps)
+
+#### Frontend: Relative Time Display (`contacts.js`)
+
+**Utility function #1**: Format Unix timestamp as relative time
+```javascript
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'Never';
+
+    const now = Math.floor(Date.now() / 1000);
+    const diffSeconds = now - timestamp;
+
+    if (diffSeconds < 0) return 'Just now';  // Clock skew
+    if (diffSeconds < 60) return 'Just now';
+    if (diffSeconds < 3600) {
+        const minutes = Math.floor(diffSeconds / 60);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    }
+    if (diffSeconds < 86400) {
+        const hours = Math.floor(diffSeconds / 3600);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+    if (diffSeconds < 2592000) {
+        const days = Math.floor(diffSeconds / 86400);
+        return `${days} day${days !== 1 ? 's' : ''} ago`;
+    }
+    if (diffSeconds < 31536000) {
+        const months = Math.floor(diffSeconds / 2592000);
+        return `${months} month${months !== 1 ? 's' : ''} ago`;
+    }
+    const years = Math.floor(diffSeconds / 31536000);
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+}
+```
+
+**Utility function #2**: Get activity status indicator
+```javascript
+function getActivityStatus(timestamp) {
+    if (!timestamp) {
+        return {
+            icon: '⚫',
+            color: '#6c757d',
+            title: 'Never seen'
+        };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const diffSeconds = now - timestamp;
+
+    // Active (< 5 minutes)
+    if (diffSeconds < 300) {
+        return {
+            icon: '🟢',
+            color: '#28a745',
+            title: 'Active (seen recently)'
+        };
+    }
+
+    // Recent (< 1 hour)
+    if (diffSeconds < 3600) {
+        return {
+            icon: '🟡',
+            color: '#ffc107',
+            title: 'Recent activity'
+        };
+    }
+
+    // Inactive (> 1 hour)
+    return {
+        icon: '🔴',
+        color: '#dc3545',
+        title: 'Inactive'
+    };
+}
+```
+
+**Contact card rendering**:
+```javascript
+// Last seen row (with activity status indicator)
+const lastSeenDiv = document.createElement('div');
+lastSeenDiv.className = 'text-muted small d-flex align-items-center gap-1';
+
+if (contact.last_seen) {
+    const status = getActivityStatus(contact.last_seen);
+    const relativeTime = formatRelativeTime(contact.last_seen);
+
+    const statusIcon = document.createElement('span');
+    statusIcon.textContent = status.icon;
+    statusIcon.style.fontSize = '0.9rem';
+    statusIcon.title = status.title;  // Tooltip on hover
+
+    const timeText = document.createElement('span');
+    timeText.textContent = `Last seen: ${relativeTime}`;
+
+    lastSeenDiv.appendChild(statusIcon);
+    lastSeenDiv.appendChild(timeText);
+} else {
+    // No last_seen data available
+    const statusIcon = document.createElement('span');
+    statusIcon.textContent = '⚫';
+
+    const timeText = document.createElement('span');
+    timeText.textContent = 'Last seen: Unknown';
+
+    lastSeenDiv.appendChild(statusIcon);
+    lastSeenDiv.appendChild(timeText);
+}
+
+card.appendChild(lastSeenDiv);
+```
+
+### Debugging Journey
+
+#### Problem #1: All contacts showing "Unknown"
+
+**Symptom**: After initial implementation, all contacts showed "Last seen: Unknown"
+
+**Logs**:
+```
+Executing command: ['apply_to', 't=1,t=2,t=3,t=4', 'contact_info']
+Response: 0 matches in contacts
+```
+
+**Root cause**: Comma-separated types don't work through bridge
+
+**Fix**: Separate calls for each type
+```python
+for contact_type in ['t=1', 't=2', 't=3', 't=4']:
+    success, stdout, stderr = _run_command(['apply_to', contact_type, 'contact_info'])
+```
+
+#### Problem #2: NDJSON format not recognized
+
+**Symptom**: Line-based parser returned 0 contacts despite receiving data
+
+**User testing** (interactive session):
+```bash
+MarWoj|* apply_to t=1 contact_info
+{
+  "public_key": "4563b1621b58...",
+  "type": 1,
+  "adv_name": "daniel5120 🔫",
+  "last_advert": 1734645823,
+  ...
+}
+```
+
+**Discovery**:
+1. Output is prettified JSON (multi-line), not line-delimited
+2. Command works interactively but comma syntax fails through bridge
+3. Each contact is a separate JSON object (not array)
+
+**Failed fix**: Line-by-line NDJSON parsing
+```python
+# Tried skipping non-JSON lines
+for line in stdout.splitlines():
+    if line.strip().startswith('{'):
+        contact = json.loads(line)  # Still fails!
+```
+
+**Successful fix**: Brace-matching algorithm (see implementation above)
+
+#### Problem #3: Timestamp accuracy question
+
+**User observation**: "KRA C" (repeater connected at 0 hops) shows "Last seen: 1 year ago"
+
+**Question**: Is `last_advert` the right field to use, or should we use `lastmod`?
+
+**Status**: User will investigate at Meshcore source level and report back
+
+**Current implementation**: Using `last_advert` field (can be changed to `lastmod` if needed)
+
+### Test Results
+
+**Production testing on http://192.168.131.80:5000:**
+
+✅ **Data fetched successfully**:
+- 17 CLI contacts parsed from t=1
+- 226 REP contacts parsed from t=2
+- 20 ROOM contacts parsed from t=3
+- 0 SENS contacts parsed from t=4 (none exist)
+- **Total: 263 contacts with timestamps**
+
+✅ **UI displays correctly**:
+- "TK Zalesie Test 🦜" shows 🟡 "Last seen: 52 minutes ago"
+- "KRA C" shows 🔴 "Last seen: 1 year ago"
+- Relative time formatting works (minutes, hours, days, months, years)
+- Activity indicators show correct colors
+
+✅ **Edge cases handled**:
+- Contacts without timestamp show ⚫ "Unknown"
+- Future timestamps (clock skew) show "Just now"
+- Parser handles Unicode in names (emoji preserved)
+
+### Commits
+
+**Commit 1**: Initial "Last Seen" implementation
+```
+feat(contacts): Add 'Last Seen' timestamp display with activity indicators
+
+- Added get_contacts_with_last_seen() in cli.py to fetch detailed contact info
+- Uses 'apply_to t=TYPE contact_info' command for each contact type
+- Merges last_advert timestamps with existing contacts list in API endpoint
+- Added formatRelativeTime() and getActivityStatus() frontend functions
+- Display relative time ("5 minutes ago") with color-coded indicators (🟢🟡🔴)
+- Activity thresholds: < 5min active, < 1hr recent, > 1hr inactive
+```
+
+**Commit 2**: Debug logging added
+```
+debug(contacts): Add detailed logging to diagnose last_seen matching issue
+
+- Added logging for command execution and response data
+- Log contact counts parsed per type
+- Preview first 500 chars of command output
+```
+
+**Commit 3**: Fix NDJSON parsing with separate calls
+```
+fix(contacts): Fix NDJSON parsing and use separate calls per contact type
+
+- Changed from comma-separated t=1,t=2,t=3,t=4 to separate calls
+- Implemented line-by-line NDJSON parsing
+- Skip prompt echoes and summary lines
+```
+
+**Commit 4**: Brace-matching parser
+```
+debug(contacts): Change to brace-matching JSON parser with output preview
+
+- Walk character-by-character looking for complete JSON objects
+- Match opening/closing braces with depth counter
+- Works for both single-line and prettified JSON
+- Added output preview logging (first 500 chars)
+```
+
+**Commit 5**: Cleanup
+```
+cleanup(contacts): Remove debug logging from last_seen feature
+
+- Removed excessive debug logging after successful implementation
+- Kept essential info logging for monitoring
+```
+
+### Pending Items
+
+1. **Timestamp field verification**: User to check at Meshcore source whether `last_advert` or `lastmod` is more appropriate for "last seen" display
+2. **Performance monitoring**: Monitor API response time with 263 contacts (currently instant)
+3. **Potential optimization**: Cache `contact_info` data for 30-60 seconds to reduce redundant calls
+
 ## Conclusion
 
 Successfully implemented Contact Management v2, adding comprehensive existing contacts management to mc-webui:
@@ -684,6 +1136,8 @@ Successfully implemented Contact Management v2, adding comprehensive existing co
 - Robust parser for meshcli contacts output
 - Handles Unicode, spaces, variable widths
 - DELETE endpoint for contact removal
+- NDJSON parser for `apply_to contact_info` output (brace-matching algorithm)
+- Fetches detailed contact metadata including last_advert timestamps
 
 ✅ **Frontend**:
 - Mobile-first responsive design
@@ -691,22 +1145,35 @@ Successfully implemented Contact Management v2, adding comprehensive existing co
 - Color-coded counter badge (green/yellow/red)
 - Delete confirmation modal
 - Type badges for visual distinction
+- "Last Seen" timestamps with relative time formatting
+- Activity status indicators (🟢 active, 🟡 recent, 🔴 inactive, ⚫ unknown)
 
 ✅ **UX**:
 - Touch-friendly buttons (min-height: 44px)
 - Loading/empty/error states
 - Toast notifications for feedback
 - Clipboard copy functionality
+- Relative time display ("5 minutes ago", "2 hours ago", etc.)
+- Hover tooltips for activity status
 
 ✅ **Testing**:
 - Parsed 263 real contacts successfully
 - Handles all contact types (CLI, REP, ROOM, SENS)
 - Unicode-safe (emoji, Polish chars)
+- Fetched and displayed 263 timestamps (17 CLI + 226 REP + 20 ROOM)
+- Brace-matching parser handles prettified multi-line JSON
 
 ✅ **Documentation**:
-- README.md updated
+- README.md updated (added "Last Seen" feature description)
+- .claude/instructions.md updated (added apply_to contact_info documentation)
 - Complete technical notes (this file)
 
-**Status**: ✅ Implementation complete, ready for user testing
+✅ **Commits**:
+- 5 commits for "Last Seen" feature (initial impl, debug, fixes, cleanup)
+- Complete git history documenting the debugging journey
 
-**Next Steps**: User should test complete workflow (load, search, filter, delete) on dev-2 branch.
+**Status**: ✅ Implementation complete with "Last Seen" enhancement
+
+**Pending**: User to verify timestamp field choice (last_advert vs lastmod) at Meshcore source level
+
+**Next Steps**: User should merge dev-2 branch to dev after reviewing changes
