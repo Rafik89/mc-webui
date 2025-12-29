@@ -4,7 +4,9 @@ MeshCore CLI wrapper - executes meshcli commands via HTTP bridge
 
 import logging
 import re
+import json
 import requests
+from pathlib import Path
 from typing import Tuple, Optional, List, Dict
 from app.config import config
 
@@ -391,3 +393,159 @@ def send_dm(recipient: str, text: str) -> Tuple[bool, str]:
 
     success, stdout, stderr = _run_command(['msg', recipient.strip(), text.strip()])
     return success, stdout or stderr
+
+
+# =============================================================================
+# Contact Management (Pending Contacts)
+# =============================================================================
+
+def get_pending_contacts() -> Tuple[bool, List[Dict], str]:
+    """
+    Get list of contacts awaiting manual approval.
+
+    Returns:
+        Tuple of (success, pending_contacts_list, error_message)
+        Each contact dict: {
+            'name': str,
+            'public_key': str
+        }
+    """
+    try:
+        response = requests.get(
+            f"{config.MC_BRIDGE_URL.replace('/cli', '/pending_contacts')}",
+            timeout=DEFAULT_TIMEOUT + 5
+        )
+
+        if response.status_code != 200:
+            return False, [], f'Bridge HTTP error: {response.status_code}'
+
+        data = response.json()
+
+        if not data.get('success', False):
+            error = data.get('error', 'Failed to get pending contacts')
+            return False, [], error
+
+        pending = data.get('pending', [])
+        return True, pending, ""
+
+    except requests.exceptions.Timeout:
+        return False, [], 'Bridge timeout'
+    except requests.exceptions.ConnectionError:
+        return False, [], 'Cannot connect to meshcore-bridge service'
+    except Exception as e:
+        return False, [], str(e)
+
+
+def approve_pending_contact(public_key: str) -> Tuple[bool, str]:
+    """
+    Approve and add a pending contact by public key.
+
+    Args:
+        public_key: Full public key of the contact to approve (REQUIRED - full key works for all contact types)
+
+    Returns:
+        Tuple of (success, message)
+    """
+    if not public_key or not public_key.strip():
+        return False, "Public key is required"
+
+    try:
+        response = requests.post(
+            f"{config.MC_BRIDGE_URL.replace('/cli', '/add_pending')}",
+            json={'selector': public_key.strip()},
+            timeout=DEFAULT_TIMEOUT + 5
+        )
+
+        if response.status_code != 200:
+            return False, f'Bridge HTTP error: {response.status_code}'
+
+        data = response.json()
+
+        if not data.get('success', False):
+            error = data.get('stderr', 'Failed to approve contact')
+            return False, error
+
+        stdout = data.get('stdout', 'Contact approved successfully')
+        return True, stdout
+
+    except requests.exceptions.Timeout:
+        return False, 'Bridge timeout'
+    except requests.exceptions.ConnectionError:
+        return False, 'Cannot connect to meshcore-bridge service'
+    except Exception as e:
+        return False, str(e)
+
+
+# =============================================================================
+# Device Settings (Persistent Configuration)
+# =============================================================================
+
+def get_device_settings() -> Tuple[bool, Dict]:
+    """
+    Get persistent device settings from .webui_settings.json.
+
+    Returns:
+        Tuple of (success, settings_dict)
+        Settings dict currently contains:
+        {
+            'manual_add_contacts': bool
+        }
+    """
+    settings_path = Path(config.MC_CONFIG_DIR) / ".webui_settings.json"
+
+    try:
+        if not settings_path.exists():
+            # Return defaults if file doesn't exist
+            return True, {'manual_add_contacts': False}
+
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+            # Ensure manual_add_contacts exists
+            if 'manual_add_contacts' not in settings:
+                settings['manual_add_contacts'] = False
+            return True, settings
+
+    except Exception as e:
+        logger.error(f"Failed to read device settings: {e}")
+        return False, {'manual_add_contacts': False}
+
+
+def set_manual_add_contacts(enabled: bool) -> Tuple[bool, str]:
+    """
+    Enable or disable manual contact approval mode.
+
+    This setting is:
+    1. Saved to .webui_settings.json for persistence across container restarts
+    2. Applied immediately to the running meshcli session via bridge
+
+    Args:
+        enabled: True to enable manual approval, False for automatic
+
+    Returns:
+        Tuple of (success, message)
+    """
+    try:
+        response = requests.post(
+            f"{config.MC_BRIDGE_URL.replace('/cli', '/set_manual_add_contacts')}",
+            json={'enabled': enabled},
+            timeout=DEFAULT_TIMEOUT + 5
+        )
+
+        if response.status_code != 200:
+            return False, f'Bridge HTTP error: {response.status_code}'
+
+        data = response.json()
+
+        if not data.get('success', False):
+            error = data.get('error', 'Failed to set manual_add_contacts')
+            return False, error
+
+        message = data.get('message', f"manual_add_contacts set to {'on' if enabled else 'off'}")
+        return True, message
+
+    except requests.exceptions.Timeout:
+        return False, 'Bridge timeout'
+    except requests.exceptions.ConnectionError:
+        return False, 'Cannot connect to meshcore-bridge service'
+    except Exception as e:
+        return False, str(e)

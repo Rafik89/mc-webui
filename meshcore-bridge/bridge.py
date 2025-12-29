@@ -119,19 +119,51 @@ class MeshCLISession:
             logger.error(f"Failed to start meshcli session: {e}")
             raise
 
+    def _load_webui_settings(self):
+        """
+        Load webui settings from .webui_settings.json file.
+
+        Returns:
+            dict: Settings dictionary or empty dict if file doesn't exist
+        """
+        settings_path = self.config_dir / ".webui_settings.json"
+
+        if not settings_path.exists():
+            logger.info("No webui settings file found, using defaults")
+            return {}
+
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+                logger.info(f"Loaded webui settings: {settings}")
+                return settings
+        except Exception as e:
+            logger.error(f"Failed to load webui settings: {e}")
+            return {}
+
     def _init_session_settings(self):
-        """Configure meshcli session for advert logging, message subscription, and manual contact approval"""
+        """Configure meshcli session for advert logging, message subscription, and user-configured settings"""
         logger.info("Configuring meshcli session settings")
 
         # Send configuration commands directly to stdin (bypass queue for init)
         if self.process and self.process.stdin:
             try:
+                # Core settings (always enabled)
                 self.process.stdin.write('set json_log_rx on\n')
                 self.process.stdin.write('set print_adverts on\n')
-                self.process.stdin.write('set manual_add_contacts on\n')
                 self.process.stdin.write('msgs_subscribe\n')
+
+                # User-configurable settings from .webui_settings.json
+                webui_settings = self._load_webui_settings()
+                manual_add_contacts = webui_settings.get('manual_add_contacts', False)
+
+                if manual_add_contacts:
+                    self.process.stdin.write('set manual_add_contacts on\n')
+                    logger.info("Session settings applied: json_log_rx=on, print_adverts=on, manual_add_contacts=on, msgs_subscribe")
+                else:
+                    logger.info("Session settings applied: json_log_rx=on, print_adverts=on, manual_add_contacts=off (default), msgs_subscribe")
+
                 self.process.stdin.flush()
-                logger.info("Session settings applied: json_log_rx=on, print_adverts=on, manual_add_contacts=on, msgs_subscribe")
             except Exception as e:
                 logger.error(f"Failed to apply session settings: {e}")
 
@@ -642,6 +674,101 @@ def add_pending_contact():
             'stdout': '',
             'stderr': str(e),
             'returncode': -1
+        }), 500
+
+
+@app.route('/set_manual_add_contacts', methods=['POST'])
+def set_manual_add_contacts():
+    """
+    Enable or disable manual contact approval mode.
+
+    This setting is:
+    1. Saved to .webui_settings.json for persistence across container restarts
+    2. Applied immediately to the running meshcli session
+
+    Request JSON:
+        {
+            "enabled": true/false
+        }
+
+    Response JSON:
+        {
+            "success": true,
+            "message": "manual_add_contacts set to on"
+        }
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'enabled' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required field: enabled'
+            }), 400
+
+        enabled = data['enabled']
+
+        if not isinstance(enabled, bool):
+            return jsonify({
+                'success': False,
+                'error': 'enabled must be a boolean'
+            }), 400
+
+        # Save to persistent settings file
+        settings_path = meshcli_session.config_dir / ".webui_settings.json"
+
+        try:
+            # Read existing settings or create new
+            if settings_path.exists():
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            else:
+                settings = {}
+
+            # Update manual_add_contacts setting
+            settings['manual_add_contacts'] = enabled
+
+            # Write back to file
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+
+            logger.info(f"Saved manual_add_contacts={enabled} to {settings_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to save settings file: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to save settings: {str(e)}'
+            }), 500
+
+        # Apply setting immediately to running session
+        if not meshcli_session or not meshcli_session.process:
+            return jsonify({
+                'success': False,
+                'error': 'meshcli session not initialized'
+            }), 503
+
+        # Execute set manual_add_contacts on|off command
+        command_value = 'on' if enabled else 'off'
+        result = meshcli_session.execute_command(['set', 'manual_add_contacts', command_value], timeout=DEFAULT_TIMEOUT)
+
+        if not result['success']:
+            return jsonify({
+                'success': False,
+                'error': f"Failed to apply setting: {result.get('stderr', 'Unknown error')}"
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'message': f"manual_add_contacts set to {command_value}",
+            'enabled': enabled
+        }), 200
+
+    except Exception as e:
+        logger.error(f"API error in /set_manual_add_contacts: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 

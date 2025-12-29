@@ -21,6 +21,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - 🔐 **Channel sharing** - Share channels via QR code or encrypted keys
 - 🔓 **Public channels** - Join public channels (starting with #) without encryption keys
 - 🎯 **Reply to users** - Quick reply with `@[UserName]` format
+- 👥 **Contact management** - Manual contact approval mode with pending contacts list (persistent settings)
 - 🧹 **Clean contacts** - Remove inactive contacts with configurable threshold
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
@@ -307,7 +308,64 @@ Access the Direct Messages feature:
 - Each conversation shows unread indicator (*) in the dropdown
 - DM badge in the menu shows total unread DM count
 
-### Managing Contacts
+### Contact Management
+
+Access the Contact Management feature to control who can connect to your node:
+
+**From the menu:**
+1. Click the menu icon (☰) in the navbar
+2. Select "Contact Management" from the menu
+3. Opens the contact management page
+
+#### Manual Contact Approval
+
+By default, new contacts attempting to connect are automatically added to your contacts list. You can enable manual approval to control who can communicate with your node.
+
+**Enable manual approval:**
+1. On the Contact Management page, toggle the "Manual Contact Approval" switch
+2. When enabled, new contact requests will appear in the Pending Contacts list
+3. This setting persists across container restarts
+
+**Security benefits:**
+- **Control over network access** - Only approved contacts can communicate with your node
+- **Prevention of spam/unwanted contacts** - Filter out random nodes attempting connection
+- **Explicit trust model** - You decide who to trust on the mesh network
+
+#### Pending Contacts
+
+When manual approval is enabled, new contacts appear in the Pending Contacts list for review:
+
+**Approve a contact:**
+1. View the contact name and truncated public key
+2. Click "Copy Full Key" to copy the complete public key (useful for verification)
+3. Click "Approve" to add the contact to your contacts list
+4. The contact is moved from pending to regular contacts
+
+**Note:** Always use the full public key for approval (not name or prefix). This ensures compatibility with all contact types (CLI, ROOM, REP, SENS).
+
+**Refresh pending list:**
+- Click the "Refresh" button to check for new pending contacts
+- The page automatically loads pending contacts when first opened
+
+#### Debugging
+
+If you encounter issues with contact management:
+
+**Check logs:**
+```bash
+# mc-webui container logs
+docker compose logs -f mc-webui
+
+# meshcore-bridge container logs (where settings are applied)
+docker compose logs -f meshcore-bridge
+```
+
+**Look for:**
+- "Loaded webui settings" - confirms settings file is being read
+- "manual_add_contacts set to on/off" - confirms setting is applied to meshcli session
+- "Saved manual_add_contacts=..." - confirms setting is persisted to file
+
+### Managing Contacts (Cleanup)
 
 Access the settings panel to clean up inactive contacts:
 1. Click the settings icon
