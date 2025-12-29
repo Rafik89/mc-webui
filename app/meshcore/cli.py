@@ -564,35 +564,49 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
             logger.info(f"apply_to {contact_type} contact_info returned {len(stdout)} bytes")
 
             # Parse NDJSON output (newline-delimited JSON)
-            # Each line is a separate JSON object, except the last line which is "> N matches"
+            # Output may be prettified JSON, not line-delimited
+            # Try to extract all JSON objects from the text
             try:
-                lines = stdout.strip().split('\n')
-                parsed_count = 0
+                # Log first 500 chars for debugging
+                logger.info(f"First 500 chars of {contact_type} output: {stdout[:500]}")
 
-                for line in lines:
-                    line = line.strip()
+                # Strategy: JSON objects might be prettified (multiline)
+                # We need to find all { ... } blocks
+                import re
 
-                    # Skip empty lines and summary line
-                    if not line or line.startswith('>') or line.startswith('MarWoj|'):
-                        continue
+                # Find all complete JSON objects (balanced braces)
+                json_objects = []
+                depth = 0
+                start_idx = None
 
-                    try:
-                        # Parse each line as a separate JSON object
-                        contact = json.loads(line)
+                for i, char in enumerate(stdout):
+                    if char == '{':
+                        if depth == 0:
+                            start_idx = i
+                        depth += 1
+                    elif char == '}':
+                        depth -= 1
+                        if depth == 0 and start_idx is not None:
+                            # Found complete JSON object
+                            json_str = stdout[start_idx:i+1]
+                            try:
+                                contact = json.loads(json_str)
+                                if 'public_key' in contact:
+                                    json_objects.append(contact)
+                            except json.JSONDecodeError:
+                                logger.debug(f"Failed to parse JSON object at position {start_idx}")
+                                pass
+                            start_idx = None
 
-                        if 'public_key' in contact:
-                            # Use full public key as index
-                            contacts_dict[contact['public_key']] = contact
-                            parsed_count += 1
+                parsed_count = len(json_objects)
 
-                            # Log first contact for debugging
-                            if len(contacts_dict) == 1:
-                                logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
+                # Add to contacts dict
+                for contact in json_objects:
+                    contacts_dict[contact['public_key']] = contact
 
-                    except json.JSONDecodeError:
-                        # Skip lines that aren't valid JSON
-                        logger.debug(f"Skipping non-JSON line: {line[:50]}")
-                        continue
+                    # Log first contact for debugging
+                    if len(contacts_dict) == 1:
+                        logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
 
                 logger.info(f"Parsed {parsed_count} contacts from {contact_type}")
 
