@@ -561,19 +561,10 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
                 logger.warning(f"apply_to {contact_type} contact_info failed: {stderr}")
                 continue  # Skip this type, try next
 
-            logger.info(f"apply_to {contact_type} contact_info returned {len(stdout)} bytes")
-
-            # Parse NDJSON output (newline-delimited JSON)
-            # Output may be prettified JSON, not line-delimited
-            # Try to extract all JSON objects from the text
+            # Parse prettified JSON output
+            # Output contains multiple JSON objects separated by newlines
+            # Use brace-matching to extract each complete object
             try:
-                # Log first 500 chars for debugging
-                logger.info(f"First 500 chars of {contact_type} output: {stdout[:500]}")
-
-                # Strategy: JSON objects might be prettified (multiline)
-                # We need to find all { ... } blocks
-                import re
-
                 # Find all complete JSON objects (balanced braces)
                 json_objects = []
                 depth = 0
@@ -594,21 +585,15 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
                                 if 'public_key' in contact:
                                     json_objects.append(contact)
                             except json.JSONDecodeError:
-                                logger.debug(f"Failed to parse JSON object at position {start_idx}")
+                                # Skip malformed JSON
                                 pass
                             start_idx = None
-
-                parsed_count = len(json_objects)
 
                 # Add to contacts dict
                 for contact in json_objects:
                     contacts_dict[contact['public_key']] = contact
 
-                    # Log first contact for debugging
-                    if len(contacts_dict) == 1:
-                        logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
-
-                logger.info(f"Parsed {parsed_count} contacts from {contact_type}")
+                logger.info(f"Parsed {len(json_objects)} contacts from {contact_type}")
 
             except Exception as e:
                 logger.error(f"Error parsing {contact_type} output: {e}")

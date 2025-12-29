@@ -1245,11 +1245,8 @@ def get_contacts_detailed_api():
         success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
 
         if success_detailed:
-            logger.info(f"Got {len(contacts_detailed)} detailed contacts")
-
             # Merge last_advert data with contacts
             # Match by public_key_prefix (first 12 chars of full public_key)
-            matched_count = 0
             for contact in contacts:
                 prefix = contact.get('public_key_prefix', '').lower()
 
@@ -1258,10 +1255,7 @@ def get_contacts_detailed_api():
                     if full_key.lower().startswith(prefix):
                         # Add last_seen timestamp
                         contact['last_seen'] = details.get('last_advert', None)
-                        matched_count += 1
                         break
-
-            logger.info(f"Matched {matched_count} out of {len(contacts)} contacts with last_seen data")
         else:
             # If detailed fetch failed, log warning but still return contacts without last_seen
             logger.warning(f"Failed to get last_seen data: {error_detailed}")
