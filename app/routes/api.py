@@ -1221,6 +1221,7 @@ def get_contacts_detailed_api():
                     "public_key_prefix": "df2027d3f2ef",
                     "type_label": "REP",
                     "path_or_mode": "Flood",
+                    "last_seen": 1735429453,  // Unix timestamp from last_advert
                     "raw_line": "..."
                 },
                 ...
@@ -1228,16 +1229,10 @@ def get_contacts_detailed_api():
         }
     """
     try:
+        # Get basic contacts list
         success, contacts, total_count, error = cli.get_all_contacts_detailed()
 
-        if success:
-            return jsonify({
-                'success': True,
-                'contacts': contacts,
-                'count': total_count,
-                'limit': 350  # MeshCore device limit
-            }), 200
-        else:
+        if not success:
             return jsonify({
                 'success': False,
                 'error': error or 'Failed to get contacts list',
@@ -1245,6 +1240,32 @@ def get_contacts_detailed_api():
                 'count': 0,
                 'limit': 350
             }), 500
+
+        # Get detailed contact info with last_advert timestamps
+        success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
+
+        if success_detailed:
+            # Merge last_advert data with contacts
+            # Match by public_key_prefix (first 12 chars of full public_key)
+            for contact in contacts:
+                prefix = contact.get('public_key_prefix', '')
+
+                # Find matching contact in detailed data
+                for full_key, details in contacts_detailed.items():
+                    if full_key.startswith(prefix):
+                        # Add last_seen timestamp
+                        contact['last_seen'] = details.get('last_advert', None)
+                        break
+        else:
+            # If detailed fetch failed, log warning but still return contacts without last_seen
+            logger.warning(f"Failed to get last_seen data: {error_detailed}")
+
+        return jsonify({
+            'success': True,
+            'contacts': contacts,
+            'count': total_count,
+            'limit': 350  # MeshCore device limit
+        }), 200
 
     except Exception as e:
         logger.error(f"Error getting detailed contacts list: {e}")

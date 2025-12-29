@@ -524,6 +524,63 @@ def get_all_contacts_detailed() -> Tuple[bool, List[Dict], int, str]:
         return False, [], 0, str(e)
 
 
+def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
+    """
+    Get detailed contact information including last_advert timestamps.
+
+    Uses 'apply_to t=1,t=2,t=3,t=4 contact_info' command to fetch metadata
+    for all contact types (CLI, REP, ROOM, SENS).
+
+    Returns:
+        Tuple of (success, contacts_dict, error_message)
+        contacts_dict maps public_key -> contact_details where each detail dict contains:
+        {
+            'public_key': str (full key),
+            'type': int (1=CLI, 2=REP, 3=ROOM, 4=SENS),
+            'flags': int,
+            'out_path_len': int,
+            'out_path': str,
+            'adv_name': str (name with emoji),
+            'last_advert': int (Unix timestamp),
+            'adv_lat': float,
+            'adv_lon': float,
+            'lastmod': int (Unix timestamp)
+        }
+    """
+    try:
+        # Execute command to get all contact types
+        # t=1 (CLI), t=2 (REP), t=3 (ROOM), t=4 (SENS)
+        success, stdout, stderr = _run_command(['apply_to', 't=1,t=2,t=3,t=4', 'contact_info'])
+
+        if not success:
+            return False, {}, stderr or 'Failed to get contact details'
+
+        # Parse JSON output
+        try:
+            # The output should be a JSON array
+            contact_list = json.loads(stdout)
+
+            if not isinstance(contact_list, list):
+                return False, {}, 'Unexpected response format (expected JSON array)'
+
+            # Build dictionary indexed by public_key for easy lookup
+            contacts_dict = {}
+            for contact in contact_list:
+                if 'public_key' in contact:
+                    # Use full public key as index
+                    contacts_dict[contact['public_key']] = contact
+
+            return True, contacts_dict, ""
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse contact_info JSON: {e}")
+            return False, {}, f'JSON parse error: {str(e)}'
+
+    except Exception as e:
+        logger.error(f"Error getting contact details: {e}")
+        return False, {}, str(e)
+
+
 def delete_contact(selector: str) -> Tuple[bool, str]:
     """
     Delete a contact from the device.

@@ -523,6 +523,93 @@ function renderExistingList(contacts) {
     });
 }
 
+/**
+ * Format Unix timestamp as relative time ("5 minutes ago", "2 hours ago", etc.)
+ */
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'Never';
+
+    const now = Math.floor(Date.now() / 1000); // Current time in Unix seconds
+    const diffSeconds = now - timestamp;
+
+    if (diffSeconds < 0) return 'Just now'; // Future timestamp (clock skew)
+
+    // Less than 1 minute
+    if (diffSeconds < 60) {
+        return 'Just now';
+    }
+
+    // Less than 1 hour
+    if (diffSeconds < 3600) {
+        const minutes = Math.floor(diffSeconds / 60);
+        return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    }
+
+    // Less than 1 day
+    if (diffSeconds < 86400) {
+        const hours = Math.floor(diffSeconds / 3600);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+
+    // Less than 30 days
+    if (diffSeconds < 2592000) {
+        const days = Math.floor(diffSeconds / 86400);
+        return `${days} day${days !== 1 ? 's' : ''} ago`;
+    }
+
+    // Less than 1 year
+    if (diffSeconds < 31536000) {
+        const months = Math.floor(diffSeconds / 2592000);
+        return `${months} month${months !== 1 ? 's' : ''} ago`;
+    }
+
+    // More than 1 year
+    const years = Math.floor(diffSeconds / 31536000);
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+}
+
+/**
+ * Get activity status indicator based on last_seen timestamp
+ * Returns: { icon: string, color: string, title: string }
+ */
+function getActivityStatus(timestamp) {
+    if (!timestamp) {
+        return {
+            icon: '⚫',
+            color: '#6c757d',
+            title: 'Never seen'
+        };
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const diffSeconds = now - timestamp;
+
+    // Active (< 5 minutes)
+    if (diffSeconds < 300) {
+        return {
+            icon: '🟢',
+            color: '#28a745',
+            title: 'Active (seen recently)'
+        };
+    }
+
+    // Recent (< 1 hour)
+    if (diffSeconds < 3600) {
+        return {
+            icon: '🟡',
+            color: '#ffc107',
+            title: 'Recent activity'
+        };
+    }
+
+    // Inactive (> 1 hour)
+    return {
+        icon: '🔴',
+        color: '#dc3545',
+        title: 'Inactive'
+    };
+}
+
 function createExistingContactCard(contact, index) {
     const card = document.createElement('div');
     card.className = 'existing-contact-card';
@@ -567,6 +654,38 @@ function createExistingContactCard(contact, index) {
     keyDiv.textContent = contact.public_key_prefix;
     keyDiv.title = 'Public Key Prefix';
 
+    // Last seen row (with activity status indicator)
+    const lastSeenDiv = document.createElement('div');
+    lastSeenDiv.className = 'text-muted small d-flex align-items-center gap-1';
+    lastSeenDiv.style.marginBottom = '0.25rem';
+
+    if (contact.last_seen) {
+        const status = getActivityStatus(contact.last_seen);
+        const relativeTime = formatRelativeTime(contact.last_seen);
+
+        const statusIcon = document.createElement('span');
+        statusIcon.textContent = status.icon;
+        statusIcon.style.fontSize = '0.9rem';
+        statusIcon.title = status.title;
+
+        const timeText = document.createElement('span');
+        timeText.textContent = `Last seen: ${relativeTime}`;
+
+        lastSeenDiv.appendChild(statusIcon);
+        lastSeenDiv.appendChild(timeText);
+    } else {
+        // No last_seen data available
+        const statusIcon = document.createElement('span');
+        statusIcon.textContent = '⚫';
+        statusIcon.style.fontSize = '0.9rem';
+
+        const timeText = document.createElement('span');
+        timeText.textContent = 'Last seen: Unknown';
+
+        lastSeenDiv.appendChild(statusIcon);
+        lastSeenDiv.appendChild(timeText);
+    }
+
     // Path/mode (optional)
     let pathDiv = null;
     if (contact.path_or_mode && contact.path_or_mode !== 'Flood') {
@@ -597,6 +716,7 @@ function createExistingContactCard(contact, index) {
     // Assemble card
     card.appendChild(infoRow);
     card.appendChild(keyDiv);
+    card.appendChild(lastSeenDiv);
     if (pathDiv) card.appendChild(pathDiv);
     card.appendChild(actionsDiv);
 
