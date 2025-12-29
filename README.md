@@ -347,6 +347,52 @@ When manual approval is enabled, new contacts appear in the Pending Contacts lis
 - Click the "Refresh" button to check for new pending contacts
 - The page automatically loads pending contacts when first opened
 
+#### Existing Contacts
+
+The Existing Contacts section displays all contacts currently stored on your device (CLI, REP, ROOM, SENS types).
+
+**Features:**
+- **Counter badge** - Shows current contact count vs. 350 limit (MeshCore device max)
+  - Green: Normal (< 300 contacts)
+  - Yellow: Warning (300-339 contacts)
+  - Red (pulsing): Alarm (≥ 340 contacts)
+- **Search** - Filter contacts by name or public key prefix
+- **Type filter** - Show only specific contact types (All / CLI / REP / ROOM / SENS)
+- **Contact cards** - Display name, type badge, public key prefix, and path info
+
+**Managing contacts:**
+1. **Search contacts:**
+   - Type in the search box to filter by name or public key prefix
+   - Results update instantly as you type
+
+2. **Filter by type:**
+   - Use the type dropdown to show only:
+     - **CLI** - Client devices (blue badge)
+     - **REP** - Repeaters (green badge)
+     - **ROOM** - Room servers (cyan badge)
+     - **SENS** - Sensors (yellow badge)
+
+3. **Copy public key:**
+   - Click "Copy Key" button to copy the public key prefix to clipboard
+   - Useful for sharing or verification
+
+4. **Delete a contact:**
+   - Click the "Delete" button (red trash icon)
+   - Confirm deletion in the modal dialog
+   - Contact is permanently removed from device
+   - **Warning:** This action cannot be undone
+
+**Refresh contacts list:**
+- Click the "Refresh" button to reload the contacts list
+- The page automatically loads contacts when first opened
+
+**Monitoring contact capacity:**
+- MeshCore devices have a limit of 350 contacts
+- The counter badge changes color as you approach the limit:
+  - **0-299**: Green (plenty of space)
+  - **300-339**: Yellow warning (nearing limit)
+  - **340-350**: Red alarm (critical - delete some contacts soon)
+
 #### Debugging
 
 If you encounter issues with contact management:

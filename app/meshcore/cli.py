@@ -396,8 +396,162 @@ def send_dm(recipient: str, text: str) -> Tuple[bool, str]:
 
 
 # =============================================================================
-# Contact Management (Pending Contacts)
+# Contact Management (Existing & Pending Contacts)
 # =============================================================================
+
+def get_all_contacts_detailed() -> Tuple[bool, List[Dict], int, str]:
+    """
+    Get detailed list of ALL existing contacts on the device (CLI, REP, ROOM, SENS).
+
+    Returns:
+        Tuple of (success, contacts_list, total_count, error_message)
+        Each contact dict: {
+            'name': str,
+            'public_key_prefix': str (12 hex chars),
+            'type_label': str (CLI|REP|ROOM|SENS|UNKNOWN),
+            'path_or_mode': str (Flood or hex path),
+            'raw_line': str (for debugging)
+        }
+    """
+    try:
+        success, stdout, stderr = _run_command(['contacts'])
+
+        if not success:
+            return False, [], 0, stderr or 'Failed to get contacts list'
+
+        # Parse the output
+        contacts = []
+        total_count = 0
+
+        lines = stdout.strip().split('\n')
+
+        for line in lines:
+            # Skip prompt lines and empty lines
+            if line.startswith('MarWoj|*') or not line.strip():
+                continue
+
+            # Check for final count line: "> 263 contacts in device"
+            if line.strip().startswith('>') and 'contacts in device' in line:
+                try:
+                    total_count = int(re.search(r'> (\d+) contacts', line).group(1))
+                except:
+                    pass
+                continue
+
+            # Parse contact line
+            # Format: NAME  TYPE  PUBKEY_PREFIX  PATH_OR_MODE
+            # Example: "TK Zalesie Test 🦜              REP   df2027d3f2ef  Flood"
+
+            # Strategy: work backwards from the end
+            # Last column is either "Flood" or hex path (variable length)
+            # Before that: 12-char hex public key prefix
+            # Before that: TYPE (REP, CLI, ROOM, SENS) - 4 chars with padding
+            # Everything else is the name
+
+            stripped = line.rstrip()
+            if not stripped:
+                continue
+
+            # Split by whitespace, but we need to be smart about it
+            parts = stripped.split()
+            if len(parts) < 4:
+                # Malformed line, skip
+                continue
+
+            # The last part is path_or_mode
+            path_or_mode = parts[-1]
+
+            # The second-to-last part is public_key_prefix (should be 12 hex chars)
+            public_key_prefix = parts[-2]
+
+            # The third-to-last part is type (should be REP, CLI, ROOM, SENS)
+            type_label = parts[-3].strip()
+
+            # Everything before that is the name
+            # We need to reconstruct it by finding where it ends in the original line
+            # Find the position of type_label in the line (searching from right)
+            # This is tricky because type_label might appear in the name too
+
+            # Better approach: use the public_key_prefix as anchor (it's unique hex)
+            pubkey_pos = stripped.rfind(public_key_prefix)
+            if pubkey_pos == -1:
+                continue
+
+            # Everything before the public key (minus the type and spacing) is the name
+            before_pubkey = stripped[:pubkey_pos].rstrip()
+
+            # The type should be the last word in before_pubkey
+            type_pos = before_pubkey.rfind(type_label)
+            if type_pos == -1:
+                # Type not found, try extracting it differently
+                # Just take the last token before pubkey_prefix
+                tokens = before_pubkey.split()
+                if len(tokens) >= 1:
+                    type_label = tokens[-1]
+                    name = ' '.join(tokens[:-1]).strip()
+                else:
+                    continue
+            else:
+                name = before_pubkey[:type_pos].strip()
+
+            # Validate type_label
+            if type_label not in ['CLI', 'REP', 'ROOM', 'SENS']:
+                type_label = 'UNKNOWN'
+
+            # Validate public_key_prefix (should be 12 hex chars)
+            if not re.match(r'^[a-fA-F0-9]{12}$', public_key_prefix):
+                # Invalid format, skip
+                continue
+
+            contact = {
+                'name': name,
+                'public_key_prefix': public_key_prefix.lower(),
+                'type_label': type_label,
+                'path_or_mode': path_or_mode,
+                'raw_line': line
+            }
+
+            contacts.append(contact)
+
+        # If total_count wasn't found in output, use length of contacts list
+        if total_count == 0:
+            total_count = len(contacts)
+
+        return True, contacts, total_count, ""
+
+    except Exception as e:
+        logger.error(f"Error parsing contacts list: {e}")
+        return False, [], 0, str(e)
+
+
+def delete_contact(selector: str) -> Tuple[bool, str]:
+    """
+    Delete a contact from the device.
+
+    Args:
+        selector: Contact selector (name, public_key_prefix, or full public key)
+                 Using public_key_prefix is recommended for reliability.
+
+    Returns:
+        Tuple of (success, message)
+    """
+    if not selector or not selector.strip():
+        return False, "Contact selector is required"
+
+    try:
+        success, stdout, stderr = _run_command(['remove_contact', selector.strip()])
+
+        if success:
+            message = stdout.strip() if stdout.strip() else f"Contact {selector} removed successfully"
+            return True, message
+        else:
+            error = stderr.strip() if stderr.strip() else "Failed to remove contact"
+            return False, error
+
+    except Exception as e:
+        logger.error(f"Error deleting contact: {e}")
+        return False, str(e)
+
 
 def get_pending_contacts() -> Tuple[bool, List[Dict], str]:
     """

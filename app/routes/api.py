@@ -1201,6 +1201,120 @@ def get_dm_updates():
 
 
 # =============================================================================
+# Contact Management (Existing, Pending Contacts & Settings)
+# =============================================================================
+
+@api_bp.route('/contacts/detailed', methods=['GET'])
+def get_contacts_detailed_api():
+    """
+    Get detailed list of ALL existing contacts on the device (CLI, REP, ROOM, SENS).
+
+    Returns:
+        JSON with contacts list:
+        {
+            "success": true,
+            "count": 263,
+            "limit": 350,
+            "contacts": [
+                {
+                    "name": "TK Zalesie Test 🦜",
+                    "public_key_prefix": "df2027d3f2ef",
+                    "type_label": "REP",
+                    "path_or_mode": "Flood",
+                    "raw_line": "..."
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        success, contacts, total_count, error = cli.get_all_contacts_detailed()
+
+        if success:
+            return jsonify({
+                'success': True,
+                'contacts': contacts,
+                'count': total_count,
+                'limit': 350  # MeshCore device limit
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': error or 'Failed to get contacts list',
+                'contacts': [],
+                'count': 0,
+                'limit': 350
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error getting detailed contacts list: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'contacts': [],
+            'count': 0,
+            'limit': 350
+        }), 500
+
+
+@api_bp.route('/contacts/delete', methods=['POST'])
+def delete_contact_api():
+    """
+    Delete a contact from the device.
+
+    JSON body:
+        {
+            "selector": "<public_key_prefix_or_name>"
+        }
+
+    Using public_key_prefix is recommended for reliability.
+
+    Returns:
+        JSON with deletion result:
+        {
+            "success": true,
+            "message": "Contact removed successfully"
+        }
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'selector' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required field: selector'
+            }), 400
+
+        selector = data['selector']
+
+        if not isinstance(selector, str) or not selector.strip():
+            return jsonify({
+                'success': False,
+                'error': 'selector must be a non-empty string'
+            }), 400
+
+        success, message = cli.delete_contact(selector)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': message
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': message
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error deleting contact: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# =============================================================================
 # Contact Management (Pending Contacts & Settings)
 # =============================================================================
 
