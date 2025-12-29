@@ -553,7 +553,10 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
         success, stdout, stderr = _run_command(['apply_to', 't=1,t=2,t=3,t=4', 'contact_info'])
 
         if not success:
+            logger.error(f"apply_to contact_info failed: {stderr}")
             return False, {}, stderr or 'Failed to get contact details'
+
+        logger.info(f"apply_to contact_info returned {len(stdout)} bytes")
 
         # Parse JSON output
         try:
@@ -561,7 +564,10 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
             contact_list = json.loads(stdout)
 
             if not isinstance(contact_list, list):
+                logger.error(f"Unexpected response type: {type(contact_list)}")
                 return False, {}, 'Unexpected response format (expected JSON array)'
+
+            logger.info(f"Parsed {len(contact_list)} contacts from JSON")
 
             # Build dictionary indexed by public_key for easy lookup
             contacts_dict = {}
@@ -569,11 +575,15 @@ def get_contacts_with_last_seen() -> Tuple[bool, Dict[str, Dict], str]:
                 if 'public_key' in contact:
                     # Use full public key as index
                     contacts_dict[contact['public_key']] = contact
+                    # Log first contact for debugging
+                    if len(contacts_dict) == 1:
+                        logger.info(f"Sample contact: public_key={contact['public_key'][:12]}..., last_advert={contact.get('last_advert', 'MISSING')}")
 
             return True, contacts_dict, ""
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse contact_info JSON: {e}")
+            logger.error(f"Raw output (first 500 chars): {stdout[:500]}")
             return False, {}, f'JSON parse error: {str(e)}'
 
     except Exception as e:
