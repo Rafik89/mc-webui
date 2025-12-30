@@ -44,10 +44,34 @@ def direct_messages():
 @views_bp.route('/contacts/manage')
 def contact_management():
     """
-    Contact Management view - manual approval settings and pending contacts list.
+    Contact Management Settings - manual approval + cleanup + navigation.
     """
     return render_template(
-        'contacts.html',
+        'contacts-manage.html',
+        device_name=config.MC_DEVICE_NAME,
+        refresh_interval=config.MC_REFRESH_INTERVAL
+    )
+
+
+@views_bp.route('/contacts/pending')
+def contact_pending_list():
+    """
+    Full-screen pending contacts list.
+    """
+    return render_template(
+        'contacts-pending.html',
+        device_name=config.MC_DEVICE_NAME,
+        refresh_interval=config.MC_REFRESH_INTERVAL
+    )
+
+
+@views_bp.route('/contacts/existing')
+def contact_existing_list():
+    """
+    Full-screen existing contacts list with search, filter, sort.
+    """
+    return render_template(
+        'contacts-existing.html',
         device_name=config.MC_DEVICE_NAME,
         refresh_interval=config.MC_REFRESH_INTERVAL
     )

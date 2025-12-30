@@ -22,7 +22,11 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - 🔓 **Public channels** - Join public channels (starting with #) without encryption keys
 - 🎯 **Reply to users** - Quick reply with `@[UserName]` format
 - 👥 **Contact management** - Manual contact approval mode with pending contacts list (persistent settings)
-- 🧹 **Clean contacts** - Remove inactive contacts with configurable threshold
+  - **Dedicated pages:** Separate full-screen views for pending and existing contacts
+  - **Advanced sorting:** Sort contacts by name (A-Z/Z-A) or last advertisement time (newest/oldest)
+  - **Smart filtering:** Search by name/key, filter by contact type (CLI, REP, ROOM, SENS)
+  - **Activity indicators:** Visual status icons (🟢 active, 🟡 recent, 🔴 inactive) based on last advertisement
+  - **Cleanup tool:** Remove inactive contacts with configurable threshold (moved from Settings)
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
 - 📡 **Network commands** - Send advertisement (advert) or flood advertisement (floodadv) for network management
@@ -164,11 +168,16 @@ mc-webui/
 │   │   │   └── style.css           # Custom styles
 │   │   └── js/
 │   │       ├── app.js              # Main page frontend logic
-│   │       └── dm.js               # Direct Messages page logic
+│   │       ├── dm.js               # Direct Messages page logic
+│   │       └── contacts.js         # Contact Management multi-page logic
 │   └── templates/
 │       ├── base.html               # Base template
 │       ├── index.html              # Main chat view
 │       ├── dm.html                 # Direct Messages full-page view
+│       ├── contacts_base.html      # Contact pages base template
+│       ├── contacts-manage.html    # Contact Management settings & navigation
+│       ├── contacts-pending.html   # Pending contacts full-screen view
+│       ├── contacts-existing.html  # Existing contacts with sort/filter
 │       └── components/             # Reusable components
 ├── requirements.txt                # Python dependencies
 ├── .env.example                   # Example environment config
@@ -193,6 +202,7 @@ mc-webui/
 - [x] Message Archiving (Daily archiving with browse-by-date selector)
 - [x] Smart Notifications (Unread counters per channel and total)
 - [x] Direct Messages (DM) - Private messaging with delivery status tracking
+- [x] Advanced Contact Management - Multi-page interface with sorting, filtering, and activity tracking
 
 ### Next Steps
 

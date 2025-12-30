@@ -628,11 +628,15 @@ def delete_contact(selector: str) -> Tuple[bool, str]:
     try:
         success, stdout, stderr = _run_command(['remove_contact', selector.strip()])
 
+        # Log the meshcli response for debugging
+        logger.info(f"remove_contact {selector}: success={success}, stdout='{stdout}', stderr='{stderr}'")
+
         if success:
             message = stdout.strip() if stdout.strip() else f"Contact {selector} removed successfully"
             return True, message
         else:
             error = stderr.strip() if stderr.strip() else "Failed to remove contact"
+            logger.warning(f"remove_contact failed for {selector}: {error}")
             return False, error
 
     except Exception as e:

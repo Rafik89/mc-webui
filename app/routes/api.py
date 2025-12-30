@@ -1209,6 +1209,8 @@ def get_contacts_detailed_api():
     """
     Get detailed list of ALL existing contacts on the device (CLI, REP, ROOM, SENS).
 
+    Returns full contact_info data from meshcli including GPS coordinates, paths, etc.
+
     Returns:
         JSON with contacts list:
         {
@@ -1217,53 +1219,75 @@ def get_contacts_detailed_api():
             "limit": 350,
             "contacts": [
                 {
-                    "name": "TK Zalesie Test 🦜",
-                    "public_key_prefix": "df2027d3f2ef",
-                    "type_label": "REP",
-                    "path_or_mode": "Flood",
-                    "last_seen": 1735429453,  // Unix timestamp from last_advert
-                    "raw_line": "..."
+                    "name": "TK Zalesie Test 🦜",              // adv_name
+                    "public_key": "df2027d3f2ef...",           // Full public key (64 chars)
+                    "public_key_prefix": "df2027d3f2ef",       // First 12 chars
+                    "type": 2,                                  // 1=CLI, 2=REP, 3=ROOM, 4=SENS
+                    "type_label": "REP",                        // Human-readable type
+                    "flags": 0,
+                    "out_path_len": -1,                         // -1 = Flood mode
+                    "out_path": "",                             // Path string
+                    "last_advert": 1735429453,                  // Unix timestamp
+                    "adv_lat": 50.866005,                       // GPS latitude
+                    "adv_lon": 20.669308,                       // GPS longitude
+                    "lastmod": 1715973527                       // Last modification timestamp
                 },
                 ...
             ]
         }
     """
     try:
-        # Get basic contacts list
-        success, contacts, total_count, error = cli.get_all_contacts_detailed()
+        # Get detailed contact info from meshcli (includes all fields)
+        success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
 
-        if not success:
+        if not success_detailed:
             return jsonify({
                 'success': False,
-                'error': error or 'Failed to get contacts list',
+                'error': error_detailed or 'Failed to get contact details',
                 'contacts': [],
                 'count': 0,
                 'limit': 350
             }), 500
 
-        # Get detailed contact info with last_advert timestamps
-        success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
+        # Convert dict to list and add computed fields
+        type_labels = {1: 'CLI', 2: 'REP', 3: 'ROOM', 4: 'SENS'}
+        contacts = []
 
-        if success_detailed:
-            # Merge last_advert data with contacts
-            # Match by public_key_prefix (first 12 chars of full public_key)
-            for contact in contacts:
-                prefix = contact.get('public_key_prefix', '').lower()
+        for public_key, details in contacts_detailed.items():
+            # Compute path display string
+            out_path_len = details.get('out_path_len', -1)
+            out_path = details.get('out_path', '')
+            if out_path_len == -1:
+                path_or_mode = 'Flood'
+            elif out_path:
+                path_or_mode = out_path
+            else:
+                path_or_mode = f'Path len: {out_path_len}'
 
-                # Find matching contact in detailed data
-                for full_key, details in contacts_detailed.items():
-                    if full_key.lower().startswith(prefix):
-                        # Add last_seen timestamp
-                        contact['last_seen'] = details.get('last_advert', None)
-                        break
-        else:
-            # If detailed fetch failed, log warning but still return contacts without last_seen
-            logger.warning(f"Failed to get last_seen data: {error_detailed}")
+            contact = {
+                # All original fields from contact_info
+                'public_key': public_key,
+                'type': details.get('type'),
+                'flags': details.get('flags'),
+                'out_path_len': out_path_len,
+                'out_path': out_path,
+                'last_advert': details.get('last_advert'),
+                'adv_lat': details.get('adv_lat'),
+                'adv_lon': details.get('adv_lon'),
+                'lastmod': details.get('lastmod'),
+                # Computed/convenience fields
+                'name': details.get('adv_name', ''),  # Map adv_name to name for compatibility
+                'public_key_prefix': public_key[:12] if len(public_key) >= 12 else public_key,
+                'type_label': type_labels.get(details.get('type'), 'UNKNOWN'),
+                'path_or_mode': path_or_mode,  # For UI display
+                'last_seen': details.get('last_advert'),  # Alias for compatibility
+            }
+            contacts.append(contact)
 
         return jsonify({
             'success': True,
             'contacts': contacts,
-            'count': total_count,
+            'count': len(contacts),
             'limit': 350  # MeshCore device limit
         }), 200
 

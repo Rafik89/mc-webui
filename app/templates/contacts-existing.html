@@ -1,0 +1,84 @@
+{% extends "contacts_base.html" %}
+
+{% block title %}Existing Contacts - mc-webui{% endblock %}
+
+{% block navbar_content %}
+<span class="navbar-brand mb-0 h1">
+    <i class="bi bi-person-lines-fill"></i> Existing Contacts
+    <span class="badge counter-badge counter-ok rounded-pill" id="contactsCounter" style="display: none;">0 / 350</span>
+</span>
+<div class="d-flex align-items-center gap-2">
+    <button class="btn btn-outline-light btn-sm" id="refreshExistingBtn" title="Refresh">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+</div>
+{% endblock %}
+
+{% block page_content %}
+<div id="existingPageContent">
+    <!-- Back Buttons -->
+    <div class="back-buttons">
+        <button class="btn btn-outline-secondary" onclick="window.location.href='/contacts/manage';">
+            <i class="bi bi-arrow-left"></i> Contact Management
+        </button>
+        <button class="btn btn-outline-secondary" onclick="window.location.href='/';">
+            <i class="bi bi-house"></i> Home
+        </button>
+    </div>
+
+    <!-- Search Toolbar -->
+    <div class="search-toolbar">
+        <input type="text" class="form-control" id="searchInput" placeholder="Search by name or public key...">
+    </div>
+
+    <!-- Filter and Sort Toolbar -->
+    <div class="filter-sort-toolbar">
+        <!-- Type Filter -->
+        <select class="form-select" id="typeFilter" style="max-width: 150px;">
+            <option value="ALL">All Types</option>
+            <option value="CLI">CLI</option>
+            <option value="REP">REP</option>
+            <option value="ROOM">ROOM</option>
+            <option value="SENS">SENS</option>
+        </select>
+
+        <!-- Sort Buttons -->
+        <div class="sort-buttons">
+            <button class="sort-btn" data-sort="name" id="sortByName" title="Sort by contact name">
+                <span>Name</span>
+                <i class="bi bi-sort-down"></i>
+            </button>
+            <button class="sort-btn active" data-sort="last_advert" id="sortByLastAdvert" title="Sort by last advertisement time">
+                <span>Last advert</span>
+                <i class="bi bi-sort-down"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="existingLoading" class="text-center py-5" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 text-muted">Loading contacts...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="existingEmpty" class="empty-state" style="display: none;">
+        <i class="bi bi-inbox"></i>
+        <p class="mb-0">No contacts found</p>
+        <small class="text-muted">Contacts will appear here once added</small>
+    </div>
+
+    <!-- Existing Contacts List (Full-screen) -->
+    <div id="existingList" class="contacts-list-fullscreen">
+        <!-- Dynamically populated by contacts.js -->
+    </div>
+
+    <!-- Error State -->
+    <div id="existingError" class="alert alert-danger" style="display: none;" role="alert">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span id="existingErrorMessage">Failed to load contacts</span>
+    </div>
+</div>
+{% endblock %}

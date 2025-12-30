@@ -1,0 +1,91 @@
+{% extends "contacts_base.html" %}
+
+{% block title %}Contact Management Settings - mc-webui{% endblock %}
+
+{% block navbar_content %}
+<span class="navbar-brand mb-0 h1">
+    <i class="bi bi-person-check"></i> Contact Management
+</span>
+<div class="d-flex align-items-center gap-2">
+    <button class="btn btn-outline-light btn-sm" onclick="window.location.href='/';" title="Home">
+        <i class="bi bi-house"></i>
+    </button>
+</div>
+{% endblock %}
+
+{% block page_content %}
+<div id="managePageContent">
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h2 class="mb-1">
+            <i class="bi bi-gear"></i> Settings
+        </h2>
+        <p class="text-muted small mb-0">Configure contact management preferences</p>
+    </div>
+
+    <!-- Manual Approval Settings Section -->
+    <div class="compact-setting">
+        <div class="form-check form-switch mb-0 d-flex align-items-center gap-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="manualApprovalSwitch" style="cursor: pointer; min-width: 3rem; min-height: 1.5rem;">
+            <label class="form-check-label mb-0" for="manualApprovalSwitch" style="cursor: pointer; font-weight: 500;">
+                <span id="switchLabel">Loading...</span>
+            </label>
+        </div>
+        <i class="bi bi-info-circle info-icon"
+           data-bs-toggle="tooltip"
+           data-bs-placement="top"
+           title="When enabled, new contacts must be manually approved before they can communicate with your node"></i>
+    </div>
+
+    <!-- Cleanup Inactive Contacts Section -->
+    <div class="cleanup-section">
+        <h6>
+            <i class="bi bi-trash"></i>
+            <span>Cleanup Inactive Contacts</span>
+            <i class="bi bi-info-circle info-icon"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               title="Remove contacts that haven't sent an advertisement in a specified time period"></i>
+        </h6>
+        <div class="mb-3">
+            <label for="inactiveHours" class="form-label">Remove contacts inactive for:</label>
+            <div class="input-group">
+                <input type="number" class="form-control" id="inactiveHours" value="48" min="1">
+                <span class="input-group-text">hours</span>
+            </div>
+        </div>
+        <button class="btn btn-danger" id="cleanupBtn">
+            <i class="bi bi-trash"></i> Clean Inactive Contacts
+        </button>
+    </div>
+
+    <!-- Navigation Section -->
+    <div class="mb-4">
+        <h5 class="mb-3">
+            <i class="bi bi-list-ul"></i> Manage Contacts
+        </h5>
+
+        <!-- Pending Contacts Card -->
+        <div class="nav-card" onclick="window.location.href='/contacts/pending';">
+            <div>
+                <h6><i class="bi bi-hourglass-split"></i> Pending Contacts</h6>
+                <small class="text-muted">Contacts awaiting manual approval</small>
+            </div>
+            <span class="badge bg-primary rounded-pill" id="pendingBadge" style="font-size: 1.1rem;">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            </span>
+        </div>
+
+        <!-- Existing Contacts Card -->
+        <div class="nav-card" onclick="window.location.href='/contacts/existing';">
+            <div>
+                <h6><i class="bi bi-person-lines-fill"></i> Existing Contacts</h6>
+                <small class="text-muted">View and manage your approved contacts</small>
+            </div>
+            <span class="badge counter-badge counter-ok rounded-pill" id="existingBadge" style="font-size: 1.1rem;">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            </span>
+        </div>
+    </div>
+</div>
+{% endblock %}
