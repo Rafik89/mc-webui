@@ -1042,13 +1042,16 @@ async function confirmDelete() {
     }
 
     try {
+        // Use full public key if available, otherwise fall back to prefix
+        const selector = contactToDelete.full_public_key || contactToDelete.public_key_prefix;
+
         const response = await fetch('/api/contacts/delete', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                selector: contactToDelete.public_key_prefix  // Use prefix for reliability
+                selector: selector
             })
         });
 

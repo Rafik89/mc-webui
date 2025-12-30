@@ -1219,6 +1219,7 @@ def get_contacts_detailed_api():
                 {
                     "name": "TK Zalesie Test 🦜",
                     "public_key_prefix": "df2027d3f2ef",
+                    "full_public_key": "df2027d3f2ef1a2b3c4d...",  // Full key (64 chars)
                     "type_label": "REP",
                     "path_or_mode": "Flood",
                     "last_seen": 1735429453,  // Unix timestamp from last_advert
@@ -1253,8 +1254,9 @@ def get_contacts_detailed_api():
                 # Find matching contact in detailed data
                 for full_key, details in contacts_detailed.items():
                     if full_key.lower().startswith(prefix):
-                        # Add last_seen timestamp
+                        # Add last_seen timestamp AND full public key
                         contact['last_seen'] = details.get('last_advert', None)
+                        contact['full_public_key'] = full_key
                         break
         else:
             # If detailed fetch failed, log warning but still return contacts without last_seen
