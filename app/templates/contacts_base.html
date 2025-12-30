@@ -311,6 +311,18 @@
         .cleanup-section h6 {
             color: #856404;
             margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Override global overflow: hidden from style.css for Contact Management pages */
+        html, body {
+            overflow: auto !important;
+        }
+
+        main {
+            overflow: auto !important;
         }
 
         /* Mobile responsiveness */
