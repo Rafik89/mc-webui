@@ -182,7 +182,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            max-height: calc(100vh - 400px);
+            height: calc(100vh - 260px);
             min-height: 300px;
         }
 
@@ -216,7 +216,7 @@
 
         /* NEW: Full-screen lists for dedicated pages */
         .contacts-list-fullscreen {
-            height: calc(100vh - 200px);
+            height: calc(100vh - 240px);
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding: 0;
@@ -328,11 +328,11 @@
         /* Mobile responsiveness */
         @media (max-width: 768px) {
             #existingList {
-                max-height: calc(100vh - 450px);
+                height: calc(100vh - 300px);
             }
 
             .contacts-list-fullscreen {
-                height: calc(100vh - 150px);
+                height: calc(100vh - 300px);
             }
 
             .filter-sort-toolbar {
@@ -411,7 +411,7 @@
     </div>
 
     <!-- Toast container for notifications (shared across all contact pages) -->
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div class="toast-container position-fixed top-0 start-0 p-3">
         <div id="contactToast" class="toast" role="alert">
             <div class="toast-header">
                 <strong class="me-auto">Contact Management</strong>
