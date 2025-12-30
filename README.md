@@ -26,6 +26,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
   - **Advanced sorting:** Sort contacts by name (A-Z/Z-A) or last advertisement time (newest/oldest)
   - **Smart filtering:** Search by name/key, filter by contact type (CLI, REP, ROOM, SENS)
   - **Activity indicators:** Visual status icons (🟢 active, 🟡 recent, 🔴 inactive) based on last advertisement
+  - **GPS location:** View contact location on Google Maps (when GPS coordinates available)
   - **Cleanup tool:** Remove inactive contacts with configurable threshold (moved from Settings)
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
