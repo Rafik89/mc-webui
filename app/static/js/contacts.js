@@ -1,10 +1,11 @@
 /**
- * Contact Management UI
+ * Contact Management UI - Multi-Page Version
  *
  * Features:
  * - Manual contact approval toggle (persistent across restarts)
  * - Pending contacts list with approve/copy actions
- * - Existing contacts list with search, filter, and delete
+ * - Existing contacts list with search, filter, and sort
+ * - Three dedicated pages: manage, pending, existing
  * - Auto-refresh on page load
  * - Mobile-first design
  */
@@ -13,11 +14,16 @@
 // State Management
 // =============================================================================
 
+let currentPage = null; // 'manage', 'pending', 'existing'
 let manualApprovalEnabled = false;
 let pendingContacts = [];
 let existingContacts = [];
 let filteredContacts = [];
 let contactToDelete = null;
+
+// Sort state (for existing page)
+let sortBy = 'last_advert'; // 'name' or 'last_advert'
+let sortOrder = 'desc'; // 'asc' or 'desc'
 
 // =============================================================================
 // Initialization
@@ -32,34 +38,209 @@ document.addEventListener('DOMContentLoaded', () => {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Attach event listeners
-    attachEventListeners();
+    // Detect current page
+    detectCurrentPage();
 
-    // Load initial state
-    loadSettings();
-    loadPendingContacts();
-    loadExistingContacts();
+    // Initialize page-specific functionality
+    initializePage();
 });
 
-function attachEventListeners() {
+function detectCurrentPage() {
+    if (document.getElementById('managePageContent')) {
+        currentPage = 'manage';
+    } else if (document.getElementById('pendingPageContent')) {
+        currentPage = 'pending';
+    } else if (document.getElementById('existingPageContent')) {
+        currentPage = 'existing';
+    }
+    console.log('Current page:', currentPage);
+}
+
+function initializePage() {
+    switch (currentPage) {
+        case 'manage':
+            initManagePage();
+            break;
+        case 'pending':
+            initPendingPage();
+            break;
+        case 'existing':
+            initExistingPage();
+            break;
+        default:
+            console.warn('Unknown page type');
+    }
+}
+
+// =============================================================================
+// Management Page Initialization
+// =============================================================================
+
+function initManagePage() {
+    console.log('Initializing Management page...');
+
+    // Load settings for manual approval toggle
+    loadSettings();
+
+    // Load contact counts for badges
+    loadContactCounts();
+
+    // Attach event listeners for manage page
+    attachManageEventListeners();
+}
+
+function attachManageEventListeners() {
     // Manual approval toggle
     const approvalSwitch = document.getElementById('manualApprovalSwitch');
     if (approvalSwitch) {
         approvalSwitch.addEventListener('change', handleApprovalToggle);
     }
 
-    // Pending contacts refresh button
-    const refreshPendingBtn = document.getElementById('refreshPendingBtn');
-    if (refreshPendingBtn) {
-        refreshPendingBtn.addEventListener('click', () => {
+    // Cleanup button
+    const cleanupBtn = document.getElementById('cleanupBtn');
+    if (cleanupBtn) {
+        cleanupBtn.addEventListener('click', handleCleanupInactive);
+    }
+}
+
+async function loadContactCounts() {
+    try {
+        // Fetch pending count
+        const pendingResp = await fetch('/api/contacts/pending');
+        const pendingData = await pendingResp.json();
+
+        const pendingBadge = document.getElementById('pendingBadge');
+        if (pendingBadge && pendingData.success) {
+            const count = pendingData.pending?.length || 0;
+            pendingBadge.textContent = count;
+            pendingBadge.classList.remove('spinner-border', 'spinner-border-sm');
+        }
+
+        // Fetch existing count
+        const existingResp = await fetch('/api/contacts/detailed');
+        const existingData = await existingResp.json();
+
+        const existingBadge = document.getElementById('existingBadge');
+        if (existingBadge && existingData.success) {
+            const count = existingData.count || 0;
+            const limit = existingData.limit || 350;
+            existingBadge.textContent = `${count} / ${limit}`;
+            existingBadge.classList.remove('spinner-border', 'spinner-border-sm');
+
+            // Apply counter color coding
+            existingBadge.classList.remove('counter-ok', 'counter-warning', 'counter-alarm');
+            if (count >= 340) {
+                existingBadge.classList.add('counter-alarm');
+            } else if (count >= 300) {
+                existingBadge.classList.add('counter-warning');
+            } else {
+                existingBadge.classList.add('counter-ok');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading contact counts:', error);
+    }
+}
+
+async function handleCleanupInactive() {
+    const hoursInput = document.getElementById('inactiveHours');
+    const cleanupBtn = document.getElementById('cleanupBtn');
+
+    if (!hoursInput || !cleanupBtn) return;
+
+    const hours = parseInt(hoursInput.value);
+
+    if (isNaN(hours) || hours < 1) {
+        showToast('Please enter a valid number of hours', 'warning');
+        return;
+    }
+
+    // Confirm action
+    if (!confirm(`This will remove all contacts inactive for more than ${hours} hours. Continue?`)) {
+        return;
+    }
+
+    // Disable button during operation
+    const originalHTML = cleanupBtn.innerHTML;
+    cleanupBtn.disabled = true;
+    cleanupBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Cleaning...';
+
+    try {
+        const response = await fetch('/api/contacts/cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                inactive_hours: hours
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(data.message || 'Cleanup completed successfully', 'success');
+            // Reload contact counts
+            loadContactCounts();
+        } else {
+            showToast('Cleanup failed: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        console.error('Error during cleanup:', error);
+        showToast('Network error during cleanup', 'danger');
+    } finally {
+        // Re-enable button
+        cleanupBtn.disabled = false;
+        cleanupBtn.innerHTML = originalHTML;
+    }
+}
+
+// =============================================================================
+// Pending Page Initialization
+// =============================================================================
+
+function initPendingPage() {
+    console.log('Initializing Pending page...');
+
+    // Load pending contacts
+    loadPendingContacts();
+
+    // Attach event listeners for pending page
+    attachPendingEventListeners();
+}
+
+function attachPendingEventListeners() {
+    // Refresh button
+    const refreshBtn = document.getElementById('refreshPendingBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
             loadPendingContacts();
         });
     }
+}
 
-    // Existing contacts refresh button
-    const refreshExistingBtn = document.getElementById('refreshExistingBtn');
-    if (refreshExistingBtn) {
-        refreshExistingBtn.addEventListener('click', () => {
+// =============================================================================
+// Existing Page Initialization
+// =============================================================================
+
+function initExistingPage() {
+    console.log('Initializing Existing page...');
+
+    // Parse sort parameters from URL
+    parseSortParamsFromURL();
+
+    // Load existing contacts
+    loadExistingContacts();
+
+    // Attach event listeners for existing page
+    attachExistingEventListeners();
+}
+
+function attachExistingEventListeners() {
+    // Refresh button
+    const refreshBtn = document.getElementById('refreshExistingBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
             loadExistingContacts();
         });
     }
@@ -68,7 +249,7 @@ function attachEventListeners() {
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         searchInput.addEventListener('input', () => {
-            applyFilters();
+            applySortAndFilters();
         });
     }
 
@@ -76,7 +257,22 @@ function attachEventListeners() {
     const typeFilter = document.getElementById('typeFilter');
     if (typeFilter) {
         typeFilter.addEventListener('change', () => {
-            applyFilters();
+            applySortAndFilters();
+        });
+    }
+
+    // Sort buttons
+    const sortByName = document.getElementById('sortByName');
+    if (sortByName) {
+        sortByName.addEventListener('click', () => {
+            handleSortChange('name');
+        });
+    }
+
+    const sortByLastAdvert = document.getElementById('sortByLastAdvert');
+    if (sortByLastAdvert) {
+        sortByLastAdvert.addEventListener('click', () => {
+            handleSortChange('last_advert');
         });
     }
 
@@ -90,7 +286,7 @@ function attachEventListeners() {
 }
 
 // =============================================================================
-// Settings Management
+// Settings Management (shared)
 // =============================================================================
 
 async function loadSettings() {
@@ -134,9 +330,6 @@ async function handleApprovalToggle(event) {
                 enabled ? 'Manual approval enabled' : 'Manual approval disabled',
                 'success'
             );
-
-            // Reload pending contacts after toggle
-            setTimeout(() => loadPendingContacts(), 500);
         } else {
             console.error('Failed to update setting:', data.error);
             showToast('Failed to update setting: ' + data.error, 'danger');
@@ -156,7 +349,6 @@ async function handleApprovalToggle(event) {
 function updateApprovalUI(enabled) {
     const switchEl = document.getElementById('manualApprovalSwitch');
     const labelEl = document.getElementById('switchLabel');
-    const infoEl = document.getElementById('approvalInfo');
 
     if (switchEl) {
         switchEl.checked = enabled;
@@ -166,10 +358,6 @@ function updateApprovalUI(enabled) {
         labelEl.textContent = enabled
             ? 'Manual approval enabled'
             : 'Automatic approval (default)';
-    }
-
-    if (infoEl) {
-        infoEl.style.display = enabled ? 'none' : 'inline-block';
     }
 }
 
@@ -182,7 +370,7 @@ async function loadPendingContacts() {
     const emptyEl = document.getElementById('pendingEmpty');
     const listEl = document.getElementById('pendingList');
     const errorEl = document.getElementById('pendingError');
-    const countBadge = document.getElementById('pendingCount');
+    const countBadge = document.getElementById('pendingCountBadge');
 
     // Show loading state
     if (loadingEl) loadingEl.style.display = 'block';
@@ -207,7 +395,7 @@ async function loadPendingContacts() {
                 // Render pending contacts list
                 renderPendingList(pendingContacts);
 
-                // Update count badge
+                // Update count badge (in navbar)
                 if (countBadge) {
                     countBadge.textContent = pendingContacts.length;
                     countBadge.style.display = 'inline-block';
@@ -216,7 +404,7 @@ async function loadPendingContacts() {
         } else {
             console.error('Failed to load pending contacts:', data.error);
             if (errorEl) {
-                const errorMsg = document.getElementById('errorMessage');
+                const errorMsg = document.getElementById('pendingErrorMessage');
                 if (errorMsg) errorMsg.textContent = data.error || 'Failed to load pending contacts';
                 errorEl.style.display = 'block';
             }
@@ -225,7 +413,7 @@ async function loadPendingContacts() {
         console.error('Error loading pending contacts:', error);
         if (loadingEl) loadingEl.style.display = 'none';
         if (errorEl) {
-            const errorMsg = document.getElementById('errorMessage');
+            const errorMsg = document.getElementById('pendingErrorMessage');
             if (errorMsg) errorMsg.textContent = 'Network error: ' + error.message;
             errorEl.style.display = 'block';
         }
@@ -425,15 +613,15 @@ async function loadExistingContacts() {
             existingContacts = data.contacts || [];
             filteredContacts = [...existingContacts];
 
-            // Update counter badge
+            // Update counter badge (in navbar)
             updateCounter(data.count, data.limit);
 
             if (existingContacts.length === 0) {
                 // Show empty state
                 if (emptyEl) emptyEl.style.display = 'block';
             } else {
-                // Apply filters and render
-                applyFilters();
+                // Apply filters and sort
+                applySortAndFilters();
             }
         } else {
             console.error('Failed to load existing contacts:', data.error);
@@ -474,14 +662,83 @@ function updateCounter(count, limit) {
     }
 }
 
-function applyFilters() {
+// =============================================================================
+// Sorting Functionality (Existing Page)
+// =============================================================================
+
+function parseSortParamsFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    sortBy = urlParams.get('sort') || 'last_advert';
+    sortOrder = urlParams.get('order') || 'desc';
+
+    console.log('Parsed sort params:', { sortBy, sortOrder });
+
+    // Update UI to reflect current sort
+    updateSortUI();
+}
+
+function handleSortChange(newSortBy) {
+    if (sortBy === newSortBy) {
+        // Toggle order
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Change sort field
+        sortBy = newSortBy;
+        // Set default order for new field
+        sortOrder = newSortBy === 'name' ? 'asc' : 'desc';
+    }
+
+    console.log('Sort changed to:', { sortBy, sortOrder });
+
+    // Update URL parameters
+    updateURLWithSortParams();
+
+    // Update UI
+    updateSortUI();
+
+    // Re-apply filters and sort
+    applySortAndFilters();
+}
+
+function updateURLWithSortParams() {
+    const url = new URL(window.location);
+    url.searchParams.set('sort', sortBy);
+    url.searchParams.set('order', sortOrder);
+    window.history.replaceState({}, '', url);
+}
+
+function updateSortUI() {
+    // Update sort button active states and icons
+    const sortButtons = document.querySelectorAll('.sort-btn');
+
+    sortButtons.forEach(btn => {
+        const btnSort = btn.dataset.sort;
+        const icon = btn.querySelector('i');
+
+        if (btnSort === sortBy) {
+            // Active button
+            btn.classList.add('active');
+            if (icon) {
+                icon.className = sortOrder === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+            }
+        } else {
+            // Inactive button
+            btn.classList.remove('active');
+            if (icon) {
+                icon.className = 'bi bi-sort-down'; // Default icon
+            }
+        }
+    });
+}
+
+function applySortAndFilters() {
     const searchInput = document.getElementById('searchInput');
     const typeFilter = document.getElementById('typeFilter');
 
     const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     const selectedType = typeFilter ? typeFilter.value : 'ALL';
 
-    // Filter contacts
+    // First, filter contacts
     filteredContacts = existingContacts.filter(contact => {
         // Type filter
         if (selectedType !== 'ALL' && contact.type_label !== selectedType) {
@@ -498,7 +755,20 @@ function applyFilters() {
         return true;
     });
 
-    // Render filtered contacts
+    // Then, sort filtered contacts
+    filteredContacts.sort((a, b) => {
+        if (sortBy === 'name') {
+            const comparison = a.name.localeCompare(b.name);
+            return sortOrder === 'asc' ? comparison : -comparison;
+        } else if (sortBy === 'last_advert') {
+            const aTime = a.last_seen || 0;
+            const bTime = b.last_seen || 0;
+            return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+        }
+        return 0;
+    });
+
+    // Render sorted and filtered contacts
     renderExistingList(filteredContacts);
 }
 
@@ -569,7 +839,7 @@ function formatRelativeTime(timestamp) {
 }
 
 /**
- * Get activity status indicator based on last_seen timestamp
+ * Get activity status indicator based on last_advert timestamp
  * Returns: { icon: string, color: string, title: string }
  */
 function getActivityStatus(timestamp) {
@@ -589,7 +859,7 @@ function getActivityStatus(timestamp) {
         return {
             icon: '🟢',
             color: '#28a745',
-            title: 'Active (seen recently)'
+            title: 'Active (advert received recently)'
         };
     }
 
@@ -654,10 +924,10 @@ function createExistingContactCard(contact, index) {
     keyDiv.textContent = contact.public_key_prefix;
     keyDiv.title = 'Public Key Prefix';
 
-    // Last seen row (with activity status indicator)
-    const lastSeenDiv = document.createElement('div');
-    lastSeenDiv.className = 'text-muted small d-flex align-items-center gap-1';
-    lastSeenDiv.style.marginBottom = '0.25rem';
+    // Last advert row (with activity status indicator)
+    const lastAdvertDiv = document.createElement('div');
+    lastAdvertDiv.className = 'text-muted small d-flex align-items-center gap-1';
+    lastAdvertDiv.style.marginBottom = '0.25rem';
 
     if (contact.last_seen) {
         const status = getActivityStatus(contact.last_seen);
@@ -669,10 +939,10 @@ function createExistingContactCard(contact, index) {
         statusIcon.title = status.title;
 
         const timeText = document.createElement('span');
-        timeText.textContent = `Last seen: ${relativeTime}`;
+        timeText.textContent = `Last advert: ${relativeTime}`;
 
-        lastSeenDiv.appendChild(statusIcon);
-        lastSeenDiv.appendChild(timeText);
+        lastAdvertDiv.appendChild(statusIcon);
+        lastAdvertDiv.appendChild(timeText);
     } else {
         // No last_seen data available
         const statusIcon = document.createElement('span');
@@ -680,10 +950,10 @@ function createExistingContactCard(contact, index) {
         statusIcon.style.fontSize = '0.9rem';
 
         const timeText = document.createElement('span');
-        timeText.textContent = 'Last seen: Unknown';
+        timeText.textContent = 'Last advert: Unknown';
 
-        lastSeenDiv.appendChild(statusIcon);
-        lastSeenDiv.appendChild(timeText);
+        lastAdvertDiv.appendChild(statusIcon);
+        lastAdvertDiv.appendChild(timeText);
     }
 
     // Path/mode (optional)
@@ -716,7 +986,7 @@ function createExistingContactCard(contact, index) {
     // Assemble card
     card.appendChild(infoRow);
     card.appendChild(keyDiv);
-    card.appendChild(lastSeenDiv);
+    card.appendChild(lastAdvertDiv);
     if (pathDiv) card.appendChild(pathDiv);
     card.appendChild(actionsDiv);
 
