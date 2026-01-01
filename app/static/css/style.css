@@ -581,26 +581,65 @@ main {
 }
 
 /* =============================================================================
-   TEST: Floating Navigation Buttons
+   TEST: Floating Action Buttons (FAB)
    ============================================================================= */
 
-.floating-test-buttons {
-    position: sticky;
-    top: 0;
-    z-index: 999;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    padding: 0.5rem;
+.fab-container {
+    position: fixed;
+    right: 16px;
+    top: 80px;
+    z-index: 900; /* Lower than offcanvas (1045) but higher than content */
     display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-direction: column;
+    gap: 12px;
 }
 
-.floating-test-buttons .btn {
-    min-width: 100px;
-    font-weight: 500;
+.fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.fab:active {
+    transform: scale(0.95);
+}
+
+.fab-dm {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+    color: white;
+}
+
+.fab-contacts {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: white;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+    .fab-container {
+        right: 12px;
+        top: 70px;
+        gap: 10px;
+    }
+
+    .fab {
+        width: 48px;
+        height: 48px;
+        font-size: 1.25rem;
+    }
 }
 
 /* =============================================================================
