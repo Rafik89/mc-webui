@@ -20,9 +20,9 @@ let dmUnreadCounts = {};  // Track unread DM counts per conversation
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('mc-webui initialized');
 
-    // Load last seen timestamps from localStorage
-    loadLastSeenTimestamps();
-    loadDmLastSeenTimestamps();
+    // Load last seen timestamps from server
+    await loadLastSeenTimestampsFromServer();
+    await loadDmLastSeenTimestampsFromServer();
 
     // Restore last selected channel from localStorage
     const savedChannel = localStorage.getItem('mc_active_channel');
@@ -707,39 +707,64 @@ function escapeHtml(text) {
 }
 
 /**
- * Load last seen timestamps from localStorage
+ * Load last seen timestamps from server
  */
-function loadLastSeenTimestamps() {
+async function loadLastSeenTimestampsFromServer() {
     try {
-        const saved = localStorage.getItem('mc_last_seen_timestamps');
-        if (saved) {
-            lastSeenTimestamps = JSON.parse(saved);
-            console.log('Loaded last seen timestamps:', lastSeenTimestamps);
+        const response = await fetch('/api/read_status');
+        const data = await response.json();
+
+        if (data.success && data.channels) {
+            // Convert string keys to integers for channel indices
+            lastSeenTimestamps = {};
+            for (const [key, value] of Object.entries(data.channels)) {
+                lastSeenTimestamps[parseInt(key)] = value;
+            }
+            console.log('Loaded channel read status from server:', lastSeenTimestamps);
+        } else {
+            console.warn('Failed to load read status from server, using empty state');
+            lastSeenTimestamps = {};
         }
     } catch (error) {
-        console.error('Error loading last seen timestamps:', error);
+        console.error('Error loading read status from server:', error);
         lastSeenTimestamps = {};
     }
 }
 
 /**
- * Save last seen timestamps to localStorage
+ * Save channel read status to server
  */
-function saveLastSeenTimestamps() {
+async function saveChannelReadStatus(channelIdx, timestamp) {
     try {
-        localStorage.setItem('mc_last_seen_timestamps', JSON.stringify(lastSeenTimestamps));
+        const response = await fetch('/api/read_status/mark_read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'channel',
+                channel_idx: channelIdx,
+                timestamp: timestamp
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            console.error('Failed to save channel read status:', data.error);
+        }
     } catch (error) {
-        console.error('Error saving last seen timestamps:', error);
+        console.error('Error saving channel read status:', error);
     }
 }
 
 /**
  * Update last seen timestamp for current channel
  */
-function markChannelAsRead(channelIdx, timestamp) {
+async function markChannelAsRead(channelIdx, timestamp) {
     lastSeenTimestamps[channelIdx] = timestamp;
     unreadCounts[channelIdx] = 0;
-    saveLastSeenTimestamps();
+    await saveChannelReadStatus(channelIdx, timestamp);
     updateUnreadBadges();
 }
 
@@ -1172,29 +1197,50 @@ async function copyChannelKey() {
 // =============================================================================
 
 /**
- * Load DM last seen timestamps from localStorage
+ * Load DM last seen timestamps from server
  */
-function loadDmLastSeenTimestamps() {
+async function loadDmLastSeenTimestampsFromServer() {
     try {
-        const saved = localStorage.getItem('mc_dm_last_seen_timestamps');
-        if (saved) {
-            dmLastSeenTimestamps = JSON.parse(saved);
-            console.log('Loaded DM last seen timestamps:', Object.keys(dmLastSeenTimestamps).length);
+        const response = await fetch('/api/read_status');
+        const data = await response.json();
+
+        if (data.success && data.dm) {
+            dmLastSeenTimestamps = data.dm;
+            console.log('Loaded DM read status from server:', Object.keys(dmLastSeenTimestamps).length, 'conversations');
+        } else {
+            console.warn('Failed to load DM read status from server, using empty state');
+            dmLastSeenTimestamps = {};
         }
     } catch (error) {
-        console.error('Error loading DM last seen timestamps:', error);
+        console.error('Error loading DM read status from server:', error);
         dmLastSeenTimestamps = {};
     }
 }
 
 /**
- * Save DM last seen timestamps to localStorage
+ * Save DM read status to server
  */
-function saveDmLastSeenTimestamps() {
+async function saveDmReadStatus(conversationId, timestamp) {
     try {
-        localStorage.setItem('mc_dm_last_seen_timestamps', JSON.stringify(dmLastSeenTimestamps));
+        const response = await fetch('/api/read_status/mark_read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'dm',
+                conversation_id: conversationId,
+                timestamp: timestamp
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            console.error('Failed to save DM read status:', data.error);
+        }
     } catch (error) {
-        console.error('Error saving DM last seen timestamps:', error);
+        console.error('Error saving DM read status:', error);
     }
 }
 

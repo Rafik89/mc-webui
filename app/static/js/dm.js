@@ -24,8 +24,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Force reflow to ensure proper layout calculation
     document.body.offsetHeight;
 
-    // Load last seen timestamps from localStorage
-    loadDmLastSeenTimestamps();
+    // Load last seen timestamps from server
+    await loadDmLastSeenTimestampsFromServer();
 
     // Setup event listeners
     setupEventListeners();
@@ -601,37 +601,59 @@ function setupEmojiPicker() {
 }
 
 /**
- * Load DM last seen timestamps from localStorage
+ * Load DM last seen timestamps from server
  */
-function loadDmLastSeenTimestamps() {
+async function loadDmLastSeenTimestampsFromServer() {
     try {
-        const saved = localStorage.getItem('mc_dm_last_seen_timestamps');
-        if (saved) {
-            dmLastSeenTimestamps = JSON.parse(saved);
+        const response = await fetch('/api/read_status');
+        const data = await response.json();
+
+        if (data.success && data.dm) {
+            dmLastSeenTimestamps = data.dm;
+            console.log('Loaded DM read status from server:', Object.keys(dmLastSeenTimestamps).length, 'conversations');
+        } else {
+            console.warn('Failed to load DM read status from server, using empty state');
+            dmLastSeenTimestamps = {};
         }
     } catch (error) {
-        console.error('Error loading last seen timestamps:', error);
+        console.error('Error loading DM read status from server:', error);
         dmLastSeenTimestamps = {};
     }
 }
 
 /**
- * Save DM last seen timestamps to localStorage
+ * Save DM read status to server
  */
-function saveDmLastSeenTimestamps() {
+async function saveDmReadStatus(conversationId, timestamp) {
     try {
-        localStorage.setItem('mc_dm_last_seen_timestamps', JSON.stringify(dmLastSeenTimestamps));
+        const response = await fetch('/api/read_status/mark_read', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'dm',
+                conversation_id: conversationId,
+                timestamp: timestamp
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            console.error('Failed to save DM read status:', data.error);
+        }
     } catch (error) {
-        console.error('Error saving last seen timestamps:', error);
+        console.error('Error saving DM read status:', error);
     }
 }
 
 /**
  * Mark conversation as read
  */
-function markAsRead(conversationId, timestamp) {
+async function markAsRead(conversationId, timestamp) {
     dmLastSeenTimestamps[conversationId] = timestamp;
-    saveDmLastSeenTimestamps();
+    await saveDmReadStatus(conversationId, timestamp);
 
     // Update dropdown to remove unread indicator
     populateConversationSelector();

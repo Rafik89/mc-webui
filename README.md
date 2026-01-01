@@ -13,6 +13,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - 💬 **View messages** - Display chat history with intelligent auto-refresh
 - 🔔 **Smart notifications** - Bell icon with unread message counter across all channels
 - 📊 **Per-channel badges** - Unread count displayed on each channel in selector
+- 🔄 **Cross-device sync** - Unread message status syncs across all devices (server-side storage)
 - ✉️ **Send messages** - Publish to any channel (140 byte limit for LoRa)
 - 💌 **Direct messages (DM)** - Send and receive private messages with delivery status tracking
 - 📡 **Channel management** - Create, join, and switch between encrypted channels

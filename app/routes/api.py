@@ -1793,3 +1793,141 @@ def update_device_settings_api():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# =============================================================================
+# Read Status (Server-side message read tracking)
+# =============================================================================
+
+@api_bp.route('/read_status', methods=['GET'])
+def get_read_status_api():
+    """
+    Get server-side read status for all channels and DM conversations.
+
+    This replaces localStorage-based tracking to enable cross-device synchronization.
+
+    Returns:
+        JSON with read status:
+        {
+            "success": true,
+            "channels": {
+                "0": 1735900000,
+                "1": 1735900100
+            },
+            "dm": {
+                "name_User1": 1735900200,
+                "pk_abc123": 1735900300
+            }
+        }
+    """
+    try:
+        from app import read_status
+
+        status = read_status.load_read_status()
+
+        return jsonify({
+            'success': True,
+            'channels': status['channels'],
+            'dm': status['dm']
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting read status: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'channels': {},
+            'dm': {}
+        }), 500
+
+
+@api_bp.route('/read_status/mark_read', methods=['POST'])
+def mark_read_api():
+    """
+    Mark a channel or DM conversation as read.
+
+    JSON body (one of the following):
+        {"type": "channel", "channel_idx": 0, "timestamp": 1735900000}
+        {"type": "dm", "conversation_id": "name_User1", "timestamp": 1735900200}
+
+    Returns:
+        JSON with result:
+        {
+            "success": true,
+            "message": "Channel marked as read"
+        }
+    """
+    try:
+        from app import read_status
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing JSON body'
+            }), 400
+
+        msg_type = data.get('type')
+        timestamp = data.get('timestamp')
+
+        if not msg_type or not timestamp:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: type and timestamp'
+            }), 400
+
+        if msg_type == 'channel':
+            channel_idx = data.get('channel_idx')
+            if channel_idx is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing required field: channel_idx'
+                }), 400
+
+            success = read_status.mark_channel_read(channel_idx, timestamp)
+
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': f'Channel {channel_idx} marked as read'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save read status'
+                }), 500
+
+        elif msg_type == 'dm':
+            conversation_id = data.get('conversation_id')
+            if not conversation_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Missing required field: conversation_id'
+                }), 400
+
+            success = read_status.mark_dm_read(conversation_id, timestamp)
+
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': f'DM conversation {conversation_id} marked as read'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to save read status'
+                }), 500
+
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid type: {msg_type}. Must be "channel" or "dm"'
+            }), 400
+
+    except Exception as e:
+        logger.error(f"Error marking as read: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
