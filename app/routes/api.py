@@ -256,41 +256,298 @@ def get_contacts():
         }), 500
 
 
-@api_bp.route('/contacts/cleanup', methods=['POST'])
-def cleanup_contacts():
+def _filter_contacts_by_criteria(contacts: list, criteria: dict) -> list:
     """
-    Clean up inactive contacts.
+    Filter contacts based on cleanup criteria.
 
-    JSON body:
-        hours (int): Inactivity threshold in hours (optional, default from config)
+    Args:
+        contacts: List of contact dicts from /api/contacts/detailed
+        criteria: Filter criteria:
+            - name_filter (str): Partial name match (empty = ignore)
+            - types (list[int]): Contact types to include [1,2,3,4]
+            - date_field (str): "last_advert" or "lastmod"
+            - days (int): Days of inactivity (0 = ignore)
+            - path_len (int): Minimum path length, >X (0 = ignore)
 
     Returns:
-        JSON with cleanup result
+        List of contacts matching criteria
+    """
+    name_filter = criteria.get('name_filter', '').strip().lower()
+    selected_types = criteria.get('types', [1, 2, 3, 4])
+    date_field = criteria.get('date_field', 'last_advert')
+    days = criteria.get('days', 0)
+    path_len = criteria.get('path_len', 0)
+
+    # Calculate timestamp threshold for days filter
+    current_time = int(time.time())
+    days_threshold = days * 86400  # Convert days to seconds
+
+    filtered = []
+    for contact in contacts:
+        # Filter by type
+        if contact.get('type') not in selected_types:
+            continue
+
+        # Filter by name (partial match, case-insensitive)
+        if name_filter:
+            contact_name = contact.get('name', '').lower()
+            if name_filter not in contact_name:
+                continue
+
+        # Filter by date (days of inactivity)
+        if days > 0:
+            timestamp = contact.get(date_field, 0)
+            if timestamp == 0:
+                # No timestamp - consider as inactive
+                pass
+            else:
+                # Check if inactive for more than specified days
+                age_seconds = current_time - timestamp
+                if age_seconds <= days_threshold:
+                    # Still active within threshold
+                    continue
+
+        # Filter by path length (> path_len)
+        if path_len > 0:
+            contact_path_len = contact.get('out_path_len', -1)
+            if contact_path_len <= path_len:
+                continue
+
+        # Contact matches all criteria
+        filtered.append(contact)
+
+    return filtered
+
+
+@api_bp.route('/contacts/preview-cleanup', methods=['POST'])
+def preview_cleanup_contacts():
+    """
+    Preview contacts that will be deleted based on filter criteria.
+
+    JSON body:
+        {
+            "name_filter": "",              # Partial name match (empty = ignore)
+            "types": [1, 2, 3, 4],          # Contact types (1=CLI, 2=REP, 3=ROOM, 4=SENS)
+            "date_field": "last_advert",    # "last_advert" or "lastmod"
+            "days": 2,                      # Days of inactivity (0 = ignore)
+            "path_len": 0                   # Path length > X (0 = ignore)
+        }
+
+    Returns:
+        JSON with preview of contacts to be deleted:
+        {
+            "success": true,
+            "contacts": [...],
+            "count": 15
+        }
     """
     try:
         data = request.get_json() or {}
-        hours = data.get('hours', config.MC_INACTIVE_HOURS)
 
-        if not isinstance(hours, int) or hours < 1:
+        # Validate criteria
+        criteria = {
+            'name_filter': data.get('name_filter', ''),
+            'types': data.get('types', [1, 2, 3, 4]),
+            'date_field': data.get('date_field', 'last_advert'),
+            'days': data.get('days', 0),
+            'path_len': data.get('path_len', 0)
+        }
+
+        # Validate types
+        if not isinstance(criteria['types'], list) or not all(t in [1, 2, 3, 4] for t in criteria['types']):
             return jsonify({
                 'success': False,
-                'error': 'Invalid hours value (must be positive integer)'
+                'error': 'Invalid types (must be list of 1, 2, 3, 4)'
             }), 400
 
-        # Execute cleanup command
-        success, message = cli.clean_inactive_contacts(hours)
-
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Cleanup completed: {message}',
-                'hours': hours
-            }), 200
-        else:
+        # Validate date_field
+        if criteria['date_field'] not in ['last_advert', 'lastmod']:
             return jsonify({
                 'success': False,
-                'error': message
+                'error': 'Invalid date_field (must be "last_advert" or "lastmod")'
+            }), 400
+
+        # Validate numeric fields
+        if not isinstance(criteria['days'], int) or criteria['days'] < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid days (must be non-negative integer)'
+            }), 400
+
+        if not isinstance(criteria['path_len'], int) or criteria['path_len'] < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid path_len (must be non-negative integer)'
+            }), 400
+
+        # Get all contacts
+        success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
+        if not success_detailed:
+            return jsonify({
+                'success': False,
+                'error': error_detailed or 'Failed to get contacts'
             }), 500
+
+        # Convert to list format (same as /api/contacts/detailed)
+        type_labels = {1: 'CLI', 2: 'REP', 3: 'ROOM', 4: 'SENS'}
+        contacts = []
+        for public_key, details in contacts_detailed.items():
+            out_path_len = details.get('out_path_len', -1)
+            contacts.append({
+                'public_key': public_key,
+                'name': details.get('adv_name', ''),
+                'type': details.get('type'),
+                'type_label': type_labels.get(details.get('type'), 'UNKNOWN'),
+                'last_advert': details.get('last_advert'),
+                'lastmod': details.get('lastmod'),
+                'out_path_len': out_path_len,
+                'out_path': details.get('out_path', ''),
+                'adv_lat': details.get('adv_lat'),
+                'adv_lon': details.get('adv_lon')
+            })
+
+        # Filter contacts
+        filtered_contacts = _filter_contacts_by_criteria(contacts, criteria)
+
+        return jsonify({
+            'success': True,
+            'contacts': filtered_contacts,
+            'count': len(filtered_contacts)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error previewing cleanup: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/contacts/cleanup', methods=['POST'])
+def cleanup_contacts():
+    """
+    Clean up contacts based on filter criteria.
+
+    JSON body:
+        {
+            "name_filter": "",              # Partial name match (empty = ignore)
+            "types": [1, 2, 3, 4],          # Contact types (1=CLI, 2=REP, 3=ROOM, 4=SENS)
+            "date_field": "last_advert",    # "last_advert" or "lastmod"
+            "days": 2,                      # Days of inactivity (0 = ignore)
+            "path_len": 0                   # Path length > X (0 = ignore)
+        }
+
+    Returns:
+        JSON with cleanup result:
+        {
+            "success": true,
+            "deleted_count": 15,
+            "failed_count": 2,
+            "failures": [
+                {"name": "Contact1", "error": "..."},
+                ...
+            ]
+        }
+    """
+    try:
+        data = request.get_json() or {}
+
+        # Validate criteria (same as preview)
+        criteria = {
+            'name_filter': data.get('name_filter', ''),
+            'types': data.get('types', [1, 2, 3, 4]),
+            'date_field': data.get('date_field', 'last_advert'),
+            'days': data.get('days', 0),
+            'path_len': data.get('path_len', 0)
+        }
+
+        # Validate types
+        if not isinstance(criteria['types'], list) or not all(t in [1, 2, 3, 4] for t in criteria['types']):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid types (must be list of 1, 2, 3, 4)'
+            }), 400
+
+        # Validate date_field
+        if criteria['date_field'] not in ['last_advert', 'lastmod']:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid date_field (must be "last_advert" or "lastmod")'
+            }), 400
+
+        # Validate numeric fields
+        if not isinstance(criteria['days'], int) or criteria['days'] < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid days (must be non-negative integer)'
+            }), 400
+
+        if not isinstance(criteria['path_len'], int) or criteria['path_len'] < 0:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid path_len (must be non-negative integer)'
+            }), 400
+
+        # Get all contacts
+        success_detailed, contacts_detailed, error_detailed = cli.get_contacts_with_last_seen()
+        if not success_detailed:
+            return jsonify({
+                'success': False,
+                'error': error_detailed or 'Failed to get contacts'
+            }), 500
+
+        # Convert to list format
+        type_labels = {1: 'CLI', 2: 'REP', 3: 'ROOM', 4: 'SENS'}
+        contacts = []
+        for public_key, details in contacts_detailed.items():
+            out_path_len = details.get('out_path_len', -1)
+            contacts.append({
+                'public_key': public_key,
+                'name': details.get('adv_name', ''),
+                'type': details.get('type'),
+                'type_label': type_labels.get(details.get('type'), 'UNKNOWN'),
+                'last_advert': details.get('last_advert'),
+                'lastmod': details.get('lastmod'),
+                'out_path_len': out_path_len
+            })
+
+        # Filter contacts to delete
+        filtered_contacts = _filter_contacts_by_criteria(contacts, criteria)
+
+        if len(filtered_contacts) == 0:
+            return jsonify({
+                'success': True,
+                'message': 'No contacts matched the criteria',
+                'deleted_count': 0,
+                'failed_count': 0,
+                'failures': []
+            }), 200
+
+        # Delete contacts one by one, track failures
+        deleted_count = 0
+        failed_count = 0
+        failures = []
+
+        for contact in filtered_contacts:
+            contact_name = contact['name']
+            success, message = cli.delete_contact(contact_name)
+
+            if success:
+                deleted_count += 1
+            else:
+                failed_count += 1
+                failures.append({
+                    'name': contact_name,
+                    'error': message
+                })
+
+        return jsonify({
+            'success': True,
+            'message': f'Cleanup completed: {deleted_count} deleted, {failed_count} failed',
+            'deleted_count': deleted_count,
+            'failed_count': failed_count,
+            'failures': failures
+        }), 200
 
     except Exception as e:
         logger.error(f"Error cleaning contacts: {e}")

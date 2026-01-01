@@ -28,7 +28,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
   - **Smart filtering:** Search by name/key, filter by contact type (CLI, REP, ROOM, SENS)
   - **Activity indicators:** Visual status icons (🟢 active, 🟡 recent, 🔴 inactive) based on last advertisement
   - **GPS location:** View contact location on Google Maps (when GPS coordinates available)
-  - **Cleanup tool:** Remove inactive contacts with configurable threshold (moved from Settings)
+  - **Advanced cleanup tool:** Filter and remove contacts by name, type (CLI/REP/ROOM/SENS), inactivity period, and path length with preview before deletion
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
 - 📡 **Network commands** - Send advertisement (advert) or flood advertisement (floodadv) for network management
@@ -111,7 +111,6 @@ All configuration is done via environment variables in the `.env` file.
 | `MC_SERIAL_PORT` | Serial device path (use /dev/serial/by-id/ for stability) | `/dev/ttyUSB0` |
 | `MC_DEVICE_NAME` | Device name (for .msgs and .adverts.jsonl files) | `MeshCore` |
 | `MC_CONFIG_DIR` | Configuration directory (shared between containers) | `./data/meshcore` |
-| `MC_INACTIVE_HOURS` | Inactivity threshold for contact cleanup (hours) | `48` |
 | `MC_ARCHIVE_DIR` | Archive directory path | `./data/archive` |
 | `MC_ARCHIVE_ENABLED` | Enable automatic archiving | `true` |
 | `MC_ARCHIVE_RETENTION_DAYS` | Days to show in live view | `7` |
@@ -477,11 +476,24 @@ docker compose logs -f meshcore-bridge
 
 ### Managing Contacts (Cleanup)
 
-Access the settings panel to clean up inactive contacts:
-1. Click the settings icon
-2. Adjust the inactivity threshold (default: 48 hours)
-3. Click "Clean Inactive Contacts"
-4. Confirm the action
+The advanced cleanup tool allows you to filter and remove contacts based on multiple criteria:
+
+1. Navigate to **Contact Management** page (from slide-out menu)
+2. Scroll to **Cleanup Contacts** section (below Existing Contacts)
+3. Configure filters:
+   - **Name Filter:** Enter partial contact name to search (optional)
+   - **Advanced Filters** (collapsible):
+     - **Contact Types:** Select which types to include (CLI, REP, ROOM, SENS)
+     - **Date Field:** Choose between "Last Advert" (recommended) or "Last Modified"
+     - **Days of Inactivity:** Contacts inactive for more than X days (0 = ignore)
+     - **Path Length >:** Contacts with path length greater than X (0 = ignore)
+4. Click **Preview Cleanup** to see matching contacts
+5. Review the list and confirm deletion
+
+**Example use cases:**
+- Remove all REP contacts inactive for 30+ days: Select REP, set days to 30
+- Clean specific contact names: Enter partial name (e.g., "test")
+- Remove distant contacts: Set path length > 5
 
 ### Network Commands
 

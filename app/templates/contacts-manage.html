@@ -37,28 +37,6 @@
            title="When enabled, new contacts must be manually approved before they can communicate with your node"></i>
     </div>
 
-    <!-- Cleanup Inactive Contacts Section -->
-    <div class="cleanup-section">
-        <h6>
-            <i class="bi bi-trash"></i>
-            <span>Cleanup Inactive Contacts</span>
-            <i class="bi bi-info-circle info-icon"
-               data-bs-toggle="tooltip"
-               data-bs-placement="top"
-               title="Remove contacts that haven't sent an advertisement in a specified time period"></i>
-        </h6>
-        <div class="mb-3">
-            <label for="inactiveHours" class="form-label">Remove contacts inactive for:</label>
-            <div class="input-group">
-                <input type="number" class="form-control" id="inactiveHours" value="48" min="1">
-                <span class="input-group-text">hours</span>
-            </div>
-        </div>
-        <button class="btn btn-danger" id="cleanupBtn">
-            <i class="bi bi-trash"></i> Clean Inactive Contacts
-        </button>
-    </div>
-
     <!-- Navigation Section -->
     <div class="mb-4">
         <h5 class="mb-3">
@@ -85,6 +63,119 @@
             <span class="badge counter-badge counter-ok rounded-pill" id="existingBadge" style="font-size: 1.1rem;">
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
             </span>
+        </div>
+    </div>
+
+    <!-- Cleanup Contacts Section -->
+    <div class="cleanup-section">
+        <h6>
+            <i class="bi bi-trash"></i>
+            <span>Cleanup Contacts</span>
+            <i class="bi bi-info-circle info-icon"
+               data-bs-toggle="tooltip"
+               data-bs-placement="top"
+               title="Remove contacts based on various filter criteria"></i>
+        </h6>
+
+        <!-- Basic Filters (Always visible) -->
+        <div class="mb-3">
+            <label for="cleanupNameFilter" class="form-label">Name Filter (optional):</label>
+            <input type="text" class="form-control" id="cleanupNameFilter" placeholder="Enter partial name to search...">
+        </div>
+
+        <!-- Advanced Filters (Collapsible) -->
+        <div class="mb-3">
+            <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilters" aria-expanded="false" aria-controls="advancedFilters">
+                <i class="bi bi-sliders"></i> Advanced Filters
+            </button>
+        </div>
+
+        <div class="collapse" id="advancedFilters">
+            <!-- Contact Types -->
+            <div class="mb-3">
+                <label class="form-label">Contact Types:</label>
+                <div class="d-flex flex-wrap gap-2">
+                    <div class="form-check">
+                        <input class="form-check-input cleanup-type-filter" type="checkbox" value="1" id="cleanupTypeCLI" checked>
+                        <label class="form-check-label" for="cleanupTypeCLI">CLI</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input cleanup-type-filter" type="checkbox" value="2" id="cleanupTypeREP" checked>
+                        <label class="form-check-label" for="cleanupTypeREP">REP</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input cleanup-type-filter" type="checkbox" value="3" id="cleanupTypeROOM" checked>
+                        <label class="form-check-label" for="cleanupTypeROOM">ROOM</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input cleanup-type-filter" type="checkbox" value="4" id="cleanupTypeSENS" checked>
+                        <label class="form-check-label" for="cleanupTypeSENS">SENS</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date Field -->
+            <div class="mb-3">
+                <label class="form-label">Date Field:</label>
+                <div class="d-flex gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="cleanupDateField" id="cleanupDateLastAdvert" value="last_advert" checked>
+                        <label class="form-check-label" for="cleanupDateLastAdvert">Last Advert</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="cleanupDateField" id="cleanupDateLastMod" value="lastmod">
+                        <label class="form-check-label" for="cleanupDateLastMod">Last Modified</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Days of Inactivity -->
+            <div class="mb-3">
+                <label for="cleanupDays" class="form-label">Days of Inactivity (0 = ignore):</label>
+                <input type="number" class="form-control" id="cleanupDays" value="2" min="0">
+                <small class="form-text text-muted">Contacts inactive for more than this many days will be selected</small>
+            </div>
+
+            <!-- Path Length -->
+            <div class="mb-3">
+                <label for="cleanupPathLen" class="form-label">Path Length &gt; (0 = ignore):</label>
+                <input type="number" class="form-control" id="cleanupPathLen" value="0" min="0">
+                <small class="form-text text-muted">Select contacts with path length greater than this value</small>
+            </div>
+        </div>
+
+        <button class="btn btn-warning" id="cleanupPreviewBtn">
+            <i class="bi bi-eye"></i> Preview Cleanup
+        </button>
+    </div>
+</div>
+
+<!-- Cleanup Confirmation Modal -->
+<div class="modal fade" id="cleanupConfirmModal" tabindex="-1" aria-labelledby="cleanupConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="cleanupConfirmModalLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Confirm Contact Cleanup
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fw-bold">The following <span id="cleanupContactCount">0</span> contact(s) will be permanently deleted:</p>
+                <div id="cleanupContactList" class="list-group mb-3" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Contact list will be populated here -->
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-circle"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmCleanupBtn">
+                    <i class="bi bi-trash"></i> Delete Contacts
+                </button>
+            </div>
         </div>
     </div>
 </div>

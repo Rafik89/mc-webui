@@ -96,10 +96,16 @@ function attachManageEventListeners() {
         approvalSwitch.addEventListener('change', handleApprovalToggle);
     }
 
-    // Cleanup button
-    const cleanupBtn = document.getElementById('cleanupBtn');
-    if (cleanupBtn) {
-        cleanupBtn.addEventListener('click', handleCleanupInactive);
+    // Cleanup preview button
+    const cleanupPreviewBtn = document.getElementById('cleanupPreviewBtn');
+    if (cleanupPreviewBtn) {
+        cleanupPreviewBtn.addEventListener('click', handleCleanupPreview);
+    }
+
+    // Cleanup confirm button (in modal)
+    const confirmCleanupBtn = document.getElementById('confirmCleanupBtn');
+    if (confirmCleanupBtn) {
+        confirmCleanupBtn.addEventListener('click', handleCleanupConfirm);
     }
 }
 
@@ -142,28 +148,160 @@ async function loadContactCounts() {
     }
 }
 
-async function handleCleanupInactive() {
-    const hoursInput = document.getElementById('inactiveHours');
-    const cleanupBtn = document.getElementById('cleanupBtn');
+// Global variable to store preview contacts
+let cleanupPreviewContacts = [];
 
-    if (!hoursInput || !cleanupBtn) return;
+function collectCleanupCriteria() {
+    /**
+     * Collect cleanup filter criteria from form inputs.
+     *
+     * Returns:
+     *   Object with criteria: {name_filter, types, date_field, days, path_len}
+     */
+    // Name filter
+    const nameFilter = document.getElementById('cleanupNameFilter')?.value?.trim() || '';
 
-    const hours = parseInt(hoursInput.value);
+    // Selected types (checked checkboxes)
+    const typeCheckboxes = document.querySelectorAll('.cleanup-type-filter:checked');
+    const types = Array.from(typeCheckboxes).map(cb => parseInt(cb.value));
 
-    if (isNaN(hours) || hours < 1) {
-        showToast('Please enter a valid number of hours', 'warning');
+    // Date field (radio button)
+    const dateFieldRadio = document.querySelector('input[name="cleanupDateField"]:checked');
+    const dateField = dateFieldRadio?.value || 'last_advert';
+
+    // Days of inactivity
+    const days = parseInt(document.getElementById('cleanupDays')?.value) || 0;
+
+    // Path length
+    const pathLen = parseInt(document.getElementById('cleanupPathLen')?.value) || 0;
+
+    return {
+        name_filter: nameFilter,
+        types: types,
+        date_field: dateField,
+        days: days,
+        path_len: pathLen
+    };
+}
+
+async function handleCleanupPreview() {
+    const previewBtn = document.getElementById('cleanupPreviewBtn');
+    if (!previewBtn) return;
+
+    // Collect filter criteria
+    const criteria = collectCleanupCriteria();
+
+    // Validate: at least one type must be selected
+    if (criteria.types.length === 0) {
+        showToast('Please select at least one contact type', 'warning');
         return;
     }
 
-    // Confirm action
-    if (!confirm(`This will remove all contacts inactive for more than ${hours} hours. Continue?`)) {
-        return;
+    // Disable button during preview
+    const originalHTML = previewBtn.innerHTML;
+    previewBtn.disabled = true;
+    previewBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
+
+    try {
+        const response = await fetch('/api/contacts/preview-cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(criteria)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            cleanupPreviewContacts = data.contacts || [];
+
+            if (cleanupPreviewContacts.length === 0) {
+                showToast('No contacts match the selected criteria', 'info');
+                return;
+            }
+
+            // Populate modal with preview
+            populateCleanupModal(cleanupPreviewContacts);
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('cleanupConfirmModal'));
+            modal.show();
+        } else {
+            showToast('Preview failed: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        console.error('Error during cleanup preview:', error);
+        showToast('Network error during preview', 'danger');
+    } finally {
+        // Re-enable button
+        previewBtn.disabled = false;
+        previewBtn.innerHTML = originalHTML;
+    }
+}
+
+function populateCleanupModal(contacts) {
+    /**
+     * Populate cleanup confirmation modal with list of contacts.
+     */
+    const countEl = document.getElementById('cleanupContactCount');
+    const listEl = document.getElementById('cleanupContactList');
+
+    if (countEl) {
+        countEl.textContent = contacts.length;
     }
 
-    // Disable button during operation
-    const originalHTML = cleanupBtn.innerHTML;
-    cleanupBtn.disabled = true;
-    cleanupBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Cleaning...';
+    if (listEl) {
+        listEl.innerHTML = '';
+
+        contacts.forEach(contact => {
+            const item = document.createElement('div');
+            item.className = 'list-group-item';
+
+            // Format last seen time
+            const lastSeenTimestamp = contact.last_advert || 0;
+            const lastSeenText = lastSeenTimestamp > 0 ? formatRelativeTime(lastSeenTimestamp) : 'Never';
+
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong>${escapeHtml(contact.name)}</strong>
+                        <br>
+                        <small class="text-muted">
+                            Type: <span class="badge bg-secondary">${contact.type_label}</span>
+                            | Last advert: ${lastSeenText}
+                        </small>
+                    </div>
+                </div>
+            `;
+
+            listEl.appendChild(item);
+        });
+    }
+}
+
+function escapeHtml(text) {
+    /**
+     * Escape HTML special characters to prevent XSS.
+     */
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function handleCleanupConfirm() {
+    const confirmBtn = document.getElementById('confirmCleanupBtn');
+    const modal = bootstrap.Modal.getInstance(document.getElementById('cleanupConfirmModal'));
+
+    if (!confirmBtn) return;
+
+    // Collect criteria again (in case user changed filters)
+    const criteria = collectCleanupCriteria();
+
+    // Disable button during cleanup
+    const originalHTML = confirmBtn.innerHTML;
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
 
     try {
         const response = await fetch('/api/contacts/cleanup', {
@@ -171,17 +309,34 @@ async function handleCleanupInactive() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                inactive_hours: hours
-            })
+            body: JSON.stringify(criteria)
         });
 
         const data = await response.json();
 
         if (data.success) {
-            showToast(data.message || 'Cleanup completed successfully', 'success');
+            // Hide modal first
+            if (modal) modal.hide();
+
+            // Show success message
+            let message = `Cleanup completed: ${data.deleted_count} deleted`;
+            if (data.failed_count > 0) {
+                message += `, ${data.failed_count} failed`;
+            }
+
+            showToast(message, data.failed_count > 0 ? 'warning' : 'success');
+
+            // Show failures if any
+            if (data.failures && data.failures.length > 0) {
+                console.error('Cleanup failures:', data.failures);
+                // Optionally show detailed failure list to user
+            }
+
             // Reload contact counts
             loadContactCounts();
+
+            // Clear preview
+            cleanupPreviewContacts = [];
         } else {
             showToast('Cleanup failed: ' + (data.error || 'Unknown error'), 'danger');
         }
@@ -190,8 +345,8 @@ async function handleCleanupInactive() {
         showToast('Network error during cleanup', 'danger');
     } finally {
         // Re-enable button
-        cleanupBtn.disabled = false;
-        cleanupBtn.innerHTML = originalHTML;
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = originalHTML;
     }
 }
 
