@@ -4,13 +4,21 @@
 
 {% block page_content %}
 <div id="existingPageContent" class="p-3">
-    <!-- Back Buttons -->
-    <div class="back-buttons">
-        <button class="btn btn-outline-secondary" onclick="navigateTo('/contacts/manage');">
-            <i class="bi bi-arrow-left"></i> Contact Management
+    <!-- Page Header -->
+    <div class="mb-3">
+        <h4 class="mb-2">
+            <i class="bi bi-person-lines-fill"></i> Existing Contacts
+            <span class="badge counter-badge counter-ok rounded-pill" id="contactsCounter" style="display: none; font-size: 0.8rem;">0 / 350</span>
+        </h4>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-outline-secondary btn-sm" onclick="navigateTo('/contacts/manage');">
+            <i class="bi bi-arrow-left"></i> Back
         </button>
-        <button class="btn btn-outline-secondary" onclick="navigateTo('/');">
-            <i class="bi bi-house"></i> Home
+        <button class="btn btn-outline-primary btn-sm" id="refreshExistingBtn">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
     </div>
 

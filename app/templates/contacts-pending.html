@@ -4,13 +4,21 @@
 
 {% block page_content %}
 <div id="pendingPageContent" class="p-3">
-    <!-- Back Buttons -->
-    <div class="back-buttons">
-        <button class="btn btn-outline-secondary" onclick="navigateTo('/contacts/manage');">
-            <i class="bi bi-arrow-left"></i> Contact Management
+    <!-- Page Header -->
+    <div class="mb-3">
+        <h4 class="mb-2">
+            <i class="bi bi-hourglass-split"></i> Pending Contacts
+            <span class="badge bg-primary rounded-pill" id="pendingCountBadge" style="display: none; font-size: 0.8rem;">0</span>
+        </h4>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2 mb-3">
+        <button class="btn btn-outline-secondary btn-sm" onclick="navigateTo('/contacts/manage');">
+            <i class="bi bi-arrow-left"></i> Back
         </button>
-        <button class="btn btn-outline-secondary" onclick="navigateTo('/');">
-            <i class="bi bi-house"></i> Home
+        <button class="btn btn-outline-primary btn-sm" id="refreshPendingBtn">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
     </div>
 
