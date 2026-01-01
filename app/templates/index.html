@@ -106,14 +106,44 @@
     </div>
 </div>
 
-<!-- TEST: Floating Action Buttons (fixed position, no layout impact) -->
+<!-- Floating Action Buttons -->
 <div class="fab-container">
-    <button class="fab fab-dm" onclick="navigateTo('/dm');" title="Test: Direct Messages">
+    <button class="fab fab-dm" data-bs-toggle="modal" data-bs-target="#dmModal" title="Direct Messages">
         <i class="bi bi-envelope-fill"></i>
     </button>
-    <button class="fab fab-contacts" onclick="navigateTo('/contacts/manage');" title="Test: Contact Management">
+    <button class="fab fab-contacts" data-bs-toggle="modal" data-bs-target="#contactsModal" title="Contact Management">
         <i class="bi bi-person-fill"></i>
     </button>
+</div>
+
+<!-- DM Modal (Full Screen) -->
+<div class="modal fade" id="dmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="bi bi-envelope"></i> Direct Messages</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="dmFrame" src="/dm" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contact Management Modal (Full Screen) -->
+<div class="modal fade" id="contactsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-person-check"></i> Contact Management</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="contactsFrame" src="/contacts/manage" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -123,5 +153,29 @@
     window.MC_CONFIG = {
         deviceName: "{{ device_name }}"
     };
+
+    // Reload iframe content when modals are opened to ensure fresh data
+    document.addEventListener('DOMContentLoaded', function() {
+        const dmModal = document.getElementById('dmModal');
+        const contactsModal = document.getElementById('contactsModal');
+
+        if (dmModal) {
+            dmModal.addEventListener('show.bs.modal', function () {
+                const dmFrame = document.getElementById('dmFrame');
+                if (dmFrame) {
+                    dmFrame.src = dmFrame.src;
+                }
+            });
+        }
+
+        if (contactsModal) {
+            contactsModal.addEventListener('show.bs.modal', function () {
+                const contactsFrame = document.getElementById('contactsFrame');
+                if (contactsFrame) {
+                    contactsFrame.src = contactsFrame.src;
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}
