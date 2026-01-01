@@ -581,6 +581,29 @@ main {
 }
 
 /* =============================================================================
+   TEST: Floating Navigation Buttons
+   ============================================================================= */
+
+.floating-test-buttons {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    padding: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.floating-test-buttons .btn {
+    min-width: 100px;
+    font-weight: 500;
+}
+
+/* =============================================================================
    PWA Safe Area Handling
    ============================================================================= */
 

@@ -44,6 +44,16 @@
 {% endblock %}
 
 {% block content %}
+<!-- TEST: Floating navigation buttons (bypass offcanvas menu) -->
+<div class="floating-test-buttons">
+    <button class="btn btn-sm btn-success" onclick="navigateTo('/dm');" title="Test: Direct Messages">
+        <i class="bi bi-envelope"></i> DM
+    </button>
+    <button class="btn btn-sm btn-primary" onclick="navigateTo('/contacts/manage');" title="Test: Contact Management">
+        <i class="bi bi-person-check"></i> Contacts
+    </button>
+</div>
+
 <div class="container-fluid d-flex flex-column" style="height: 100%;">
     <!-- Messages Container -->
     <div class="row flex-grow-1 overflow-hidden" style="min-height: 0;">
