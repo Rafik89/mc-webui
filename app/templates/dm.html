@@ -60,29 +60,18 @@
     </style>
 </head>
 <body>
-    <!-- Navbar for DM page -->
-    <nav class="navbar navbar-dark bg-success">
-        <div class="container-fluid">
-            <div class="d-flex align-items-center gap-2">
-                <a href="/" class="btn btn-outline-light btn-sm" title="Back to Channels">
-                    <i class="bi bi-arrow-left"></i>
-                </a>
-                <span class="navbar-brand mb-0 h1">
-                    <i class="bi bi-envelope"></i> DM
-                </span>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-                <select id="dmConversationSelector" class="form-select form-select-sm" style="width: auto; min-width: 120px;" title="Select conversation">
-                    <option value="">Select chat...</option>
-                    <!-- Conversations loaded dynamically via JavaScript -->
-                </select>
-            </div>
-        </div>
-    </nav>
-
     <!-- Main Content -->
     <main>
-        <div class="container-fluid d-flex flex-column" style="height: 100%;">
+        <div class="container-fluid d-flex flex-column" style="height: 100vh;">
+            <!-- Conversation Selector Bar -->
+            <div class="row border-bottom bg-light">
+                <div class="col-12 p-2">
+                    <select id="dmConversationSelector" class="form-select" title="Select conversation">
+                        <option value="">Select chat...</option>
+                        <!-- Conversations loaded dynamically via JavaScript -->
+                    </select>
+                </div>
+            </div>
             <!-- Messages Container -->
             <div class="row flex-grow-1 overflow-hidden" style="min-height: 0;">
                 <div class="col-12" style="height: 100%;">

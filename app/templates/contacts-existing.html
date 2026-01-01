@@ -2,20 +2,8 @@
 
 {% block title %}Existing Contacts - mc-webui{% endblock %}
 
-{% block navbar_content %}
-<span class="navbar-brand mb-0 h1">
-    <i class="bi bi-person-lines-fill"></i> Existing Contacts
-    <span class="badge counter-badge counter-ok rounded-pill" id="contactsCounter" style="display: none;">0 / 350</span>
-</span>
-<div class="d-flex align-items-center gap-2">
-    <button class="btn btn-outline-light btn-sm" id="refreshExistingBtn" title="Refresh">
-        <i class="bi bi-arrow-clockwise"></i>
-    </button>
-</div>
-{% endblock %}
-
 {% block page_content %}
-<div id="existingPageContent">
+<div id="existingPageContent" class="p-3">
     <!-- Back Buttons -->
     <div class="back-buttons">
         <button class="btn btn-outline-secondary" onclick="navigateTo('/contacts/manage');">
