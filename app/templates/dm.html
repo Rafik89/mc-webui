@@ -57,13 +57,6 @@
                 max-width: 100%;
             }
         }
-
-        /* PWA safe area handling - ensure bottom UI is visible above system bars */
-        @supports (padding-bottom: env(safe-area-inset-bottom)) {
-            body {
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-        }
     </style>
 </head>
 <body>
@@ -83,6 +76,9 @@
                     <option value="">Select chat...</option>
                     <!-- Conversations loaded dynamically via JavaScript -->
                 </select>
+                <button class="btn btn-outline-light btn-sm" onclick="window.location.href='/';" title="Back to Main Menu">
+                    <i class="bi bi-list" style="font-size: 1.25rem;"></i>
+                </button>
             </div>
         </div>
     </nav>

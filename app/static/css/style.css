@@ -111,12 +111,14 @@ main {
 }
 
 /* Send Form */
-#messageInput {
+#messageInput,
+#dmMessageInput {
     resize: none;
     border-radius: 0.5rem 0 0 0.5rem;
 }
 
-#sendBtn {
+#sendBtn,
+#dmSendBtn {
     border-radius: 0 0.5rem 0.5rem 0;
 }
 
@@ -188,7 +190,8 @@ main {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-    .message {
+    .message,
+    .dm-message {
         max-width: 85%;
     }
 
@@ -196,12 +199,14 @@ main {
         font-size: 0.8rem;
     }
 
-    #messageInput {
+    #messageInput,
+    #dmMessageInput {
         font-size: 0.9rem;
     }
 
     /* Reduce padding on mobile to save vertical space */
-    #sendMessageForm {
+    #sendMessageForm,
+    #dmSendForm {
         padding: 0.5rem !important;
     }
 
@@ -217,7 +222,8 @@ main {
     }
 
     /* Navbar: Channel selector on mobile */
-    #channelSelector {
+    #channelSelector,
+    #dmConversationSelector {
         min-width: 100px !important;
         font-size: 0.9rem;
     }
@@ -377,12 +383,11 @@ main {
 
 /* DM Message Bubbles */
 .dm-message {
-    max-width: 80%;
-    padding: 0.5rem 0.75rem;
+    max-width: 70%;
+    padding: 0.75rem 1rem;
     border-radius: 1rem;
-    font-size: 0.9rem;
     word-wrap: break-word;
-    animation: fadeIn 0.2s ease-in;
+    animation: fadeIn 0.3s ease-in;
 }
 
 .dm-message.own {
@@ -573,4 +578,15 @@ main {
 #imagePreviewImg {
     border-radius: 0.5rem;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* =============================================================================
+   PWA Safe Area Handling
+   ============================================================================= */
+
+/* Ensure bottom UI is visible above system bars on mobile devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    body {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }
