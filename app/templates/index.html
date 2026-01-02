@@ -196,6 +196,12 @@
             // Update DM badges when modal is closed (without full page reload)
             dmModal.addEventListener('hidden.bs.modal', async function () {
                 try {
+                    // Reload DM read status from server to sync with app.js automatic updates
+                    // This ensures dmLastSeenTimestamps in app.js is current
+                    if (typeof loadDmLastSeenTimestampsFromServer === 'function') {
+                        await loadDmLastSeenTimestampsFromServer();
+                    }
+
                     // Fetch latest DM conversations with unread counts
                     const response = await fetch('/api/dm/conversations');
                     if (response.ok) {

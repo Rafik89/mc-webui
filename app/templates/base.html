@@ -262,6 +262,20 @@
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 
+    <!-- PWA Viewport Fix for Android -->
+    <script>
+        // Fix viewport corruption on Android PWA after page reload
+        window.addEventListener('load', function() {
+            // Force viewport recalculation
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                // Force reflow
+                document.body.style.height = '100%';
+                void(document.body.offsetHeight);
+            }, 100);
+        });
+    </script>
+
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
