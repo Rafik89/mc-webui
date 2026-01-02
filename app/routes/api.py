@@ -613,10 +613,16 @@ def execute_special_command():
         success, message = cmd_info['function']()
 
         if success:
+            # Clean up advert message
+            if command == 'advert':
+                clean_message = "Advert sent"
+            else:
+                clean_message = message or f'{command} executed successfully'
+
             return jsonify({
                 'success': True,
                 'command': command,
-                'message': message or f'{command} executed successfully'
+                'message': clean_message
             }), 200
         else:
             return jsonify({
