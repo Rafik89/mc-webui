@@ -426,8 +426,8 @@ def get_all_contacts_detailed() -> Tuple[bool, List[Dict], int, str]:
         lines = stdout.strip().split('\n')
 
         for line in lines:
-            # Skip prompt lines and empty lines
-            if line.startswith('MarWoj|*') or not line.strip():
+            # Skip prompt lines and empty lines (prompt format: <DeviceName>|*)
+            if re.match(r'^.+\|\*', line) or not line.strip():
                 continue
 
             # Check for final count line: "> 263 contacts in device"
@@ -664,7 +664,7 @@ def get_contacts_json() -> Tuple[bool, Dict[str, Dict], str]:
             return False, {}, '.contacts command returned empty output'
 
         # Parse JSON output - use brace-matching to extract complete JSON object
-        # stdout format: "MarWoj|* .contacts\n{...}\nMarWoj|* "
+        # stdout format: "<DeviceName>|* .contacts\n{...}\n<DeviceName>|* "
         # We need to find matching braces and parse only the JSON object
         try:
             # Use brace-matching to extract complete JSON object (same as bridge does)
