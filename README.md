@@ -355,6 +355,11 @@ Access the Direct Messages feature:
 4. Press Enter or click Send
 5. Click "Back" button to return to the main chat view
 
+**Persistence:**
+- The app remembers your last selected conversation
+- When you return to the DM page, it automatically opens the last conversation you were viewing
+- This works similarly to how the main page remembers your selected channel
+
 **Note:** Only client contacts (CLI) are shown in the dropdown. Repeaters (REP), rooms (ROOM), and sensors (SENS) are automatically filtered out.
 
 **Message status indicators:**

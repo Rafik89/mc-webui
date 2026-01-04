@@ -39,11 +39,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load connection status
     await loadStatus();
 
-    // Check for initial conversation from URL parameter
+    // Check for initial conversation from URL parameter, or restore last active conversation
     if (window.MC_CONFIG && window.MC_CONFIG.initialConversation) {
         const convId = window.MC_CONFIG.initialConversation;
         // Find the conversation in the list or use the ID directly
         selectConversation(convId);
+    } else {
+        // Restore last selected conversation from localStorage
+        const savedConversation = localStorage.getItem('mc_active_dm_conversation');
+        if (savedConversation) {
+            selectConversation(savedConversation);
+        }
     }
 
     // Setup auto-refresh
@@ -244,6 +250,9 @@ function populateConversationSelector() {
 async function selectConversation(conversationId) {
     currentConversationId = conversationId;
 
+    // Save to localStorage for next visit
+    localStorage.setItem('mc_active_dm_conversation', conversationId);
+
     // Find the conversation to get recipient name
     const conv = dmConversations.find(c => c.conversation_id === conversationId);
     if (conv) {
@@ -286,6 +295,9 @@ async function selectConversation(conversationId) {
 function clearConversation() {
     currentConversationId = null;
     currentRecipient = null;
+
+    // Clear from localStorage
+    localStorage.removeItem('mc_active_dm_conversation');
 
     // Disable input
     const input = document.getElementById('dmMessageInput');
