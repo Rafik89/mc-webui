@@ -688,3 +688,13 @@ main {
         padding-bottom: env(safe-area-inset-bottom);
     }
 }
+
+/* =============================================================================
+   PWA Notifications
+   ============================================================================= */
+
+/* Notification toggle disabled state */
+#notificationsToggle:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

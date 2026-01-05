@@ -85,6 +85,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     updatePendingContactsBadge();
     loadStatus();
 
+    // Update notification toggle UI
+    updateNotificationToggleUI();
+
     // Setup auto-refresh AFTER channels are loaded
     setupAutoRefresh();
 });
@@ -110,6 +113,13 @@ document.addEventListener('visibilitychange', function() {
             window.dispatchEvent(new Event('resize'));
             document.body.offsetHeight;
         }, 100);
+
+        // Clear app badge when user returns to app
+        if ('clearAppBadge' in navigator) {
+            navigator.clearAppBadge().catch((error) => {
+                console.error('Error clearing app badge on visibility:', error);
+            });
+        }
     }
 });
 
@@ -306,6 +316,12 @@ function setupEventListeners() {
         }
         await executeSpecialCommand('floodadv');
     });
+
+    // Notification toggle
+    const notificationsToggle = document.getElementById('notificationsToggle');
+    if (notificationsToggle) {
+        notificationsToggle.addEventListener('click', handleNotificationToggle);
+    }
 }
 
 /**
@@ -618,6 +634,233 @@ function setupAutoRefresh() {
     console.log(`Intelligent auto-refresh enabled: checking every ${checkInterval / 1000}s`);
 }
 
+// ============================================================================
+// PWA Notifications
+// ============================================================================
+
+/**
+ * Request notification permission from user
+ * Stores result in localStorage
+ */
+async function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+        showNotification('Powiadomienia nie są obsługiwane w tej przeglądarce', 'warning');
+        return false;
+    }
+
+    try {
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+            localStorage.setItem('mc_notifications_enabled', 'true');
+            updateNotificationToggleUI();
+            showNotification('Powiadomienia zostały włączone', 'success');
+            return true;
+        } else if (permission === 'denied') {
+            localStorage.setItem('mc_notifications_enabled', 'false');
+            updateNotificationToggleUI();
+            showNotification('Powiadomienia zostały zablokowane. Zmień ustawienia przeglądarki aby je włączyć.', 'warning');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error requesting notification permission:', error);
+        showNotification('Błąd podczas włączania powiadomień', 'danger');
+        return false;
+    }
+}
+
+/**
+ * Check current notification permission status
+ */
+function getNotificationPermission() {
+    if (!('Notification' in window)) {
+        return 'unsupported';
+    }
+    return Notification.permission;
+}
+
+/**
+ * Check if notifications are enabled by user
+ */
+function areNotificationsEnabled() {
+    return localStorage.getItem('mc_notifications_enabled') === 'true' &&
+           getNotificationPermission() === 'granted';
+}
+
+/**
+ * Update notification toggle button UI
+ */
+function updateNotificationToggleUI() {
+    const toggleBtn = document.getElementById('notificationsToggle');
+    const statusBadge = document.getElementById('notificationStatus');
+
+    if (!toggleBtn || !statusBadge) return;
+
+    const permission = getNotificationPermission();
+
+    if (permission === 'unsupported') {
+        statusBadge.className = 'badge bg-secondary';
+        statusBadge.textContent = 'Niedostępne';
+        toggleBtn.disabled = true;
+    } else if (permission === 'denied') {
+        statusBadge.className = 'badge bg-danger';
+        statusBadge.textContent = 'Zablokowane';
+        toggleBtn.disabled = false;
+    } else if (permission === 'granted') {
+        statusBadge.className = 'badge bg-success';
+        statusBadge.textContent = 'Włączone';
+        toggleBtn.disabled = false;
+    } else {
+        statusBadge.className = 'badge bg-secondary';
+        statusBadge.textContent = 'Wyłączone';
+        toggleBtn.disabled = false;
+    }
+}
+
+/**
+ * Handle notification toggle button click
+ */
+async function handleNotificationToggle() {
+    const permission = getNotificationPermission();
+
+    if (permission === 'granted') {
+        // Already granted - toggle off
+        localStorage.setItem('mc_notifications_enabled', 'false');
+        updateNotificationToggleUI();
+        showNotification('Powiadomienia zostały wyłączone', 'info');
+    } else if (permission === 'denied') {
+        // Blocked - show help message
+        showNotification('Powiadomienia są zablokowane. Zmień ustawienia w przeglądarce: Ustawienia → Strony → mc-webui → Powiadomienia', 'warning');
+    } else {
+        // Not yet requested - ask for permission
+        await requestNotificationPermission();
+    }
+}
+
+/**
+ * Send browser notification when new messages arrive
+ * @param {number} channelCount - Number of channels with new messages
+ * @param {number} dmCount - Number of DMs with new messages
+ * @param {number} pendingCount - Number of pending contacts
+ */
+function sendBrowserNotification(channelCount, dmCount, pendingCount) {
+    // Only send if enabled and app is hidden
+    if (!areNotificationsEnabled() || document.visibilityState !== 'hidden') {
+        return;
+    }
+
+    let message = '';
+    const parts = [];
+
+    if (channelCount > 0) {
+        parts.push(`${channelCount} ${channelCount === 1 ? 'kanał' : 'kanały'}`);
+    }
+    if (dmCount > 0) {
+        parts.push(`${dmCount} ${dmCount === 1 ? 'wiadomość prywatna' : 'wiadomości prywatne'}`);
+    }
+    if (pendingCount > 0) {
+        parts.push(`${pendingCount} ${pendingCount === 1 ? 'oczekujący kontakt' : 'oczekujące kontakty'}`);
+    }
+
+    if (parts.length === 0) return;
+
+    message = `Nowe: ${parts.join(', ')}`;
+
+    try {
+        const notification = new Notification('mc-webui', {
+            body: message,
+            icon: '/static/images/android-chrome-192x192.png',
+            badge: '/static/images/android-chrome-192x192.png',
+            tag: 'mc-webui-updates', // Prevents spam - replaces previous notification
+            requireInteraction: false, // Auto-dismiss after ~5s
+            silent: false
+        });
+
+        // Click handler - bring app to focus
+        notification.onclick = function() {
+            window.focus();
+            notification.close();
+        };
+
+    } catch (error) {
+        console.error('Error sending notification:', error);
+    }
+}
+
+/**
+ * Track previous counts to detect NEW messages (not just unread)
+ */
+let previousTotalUnread = 0;
+let previousDmUnread = 0;
+let previousPendingCount = 0;
+
+/**
+ * Check if we should send notification based on count changes
+ */
+function checkAndNotify() {
+    // Calculate current totals
+    const currentTotalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+
+    // Get DM unread count from badge
+    const dmBadge = document.querySelector('.fab-badge-dm');
+    const currentDmUnread = dmBadge ? parseInt(dmBadge.textContent) || 0 : 0;
+
+    // Get pending contacts count from badge
+    const pendingBadge = document.querySelector('.fab-badge-pending');
+    const currentPendingCount = pendingBadge ? parseInt(pendingBadge.textContent) || 0 : 0;
+
+    // Detect increases (new messages/contacts)
+    const channelIncrease = currentTotalUnread > previousTotalUnread;
+    const dmIncrease = currentDmUnread > previousDmUnread;
+    const pendingIncrease = currentPendingCount > previousPendingCount;
+
+    // Send notification if ANY category increased
+    if (channelIncrease || dmIncrease || pendingIncrease) {
+        const channelDelta = channelIncrease ? (currentTotalUnread - previousTotalUnread) : 0;
+        const dmDelta = dmIncrease ? (currentDmUnread - previousDmUnread) : 0;
+        const pendingDelta = pendingIncrease ? (currentPendingCount - previousPendingCount) : 0;
+
+        sendBrowserNotification(channelDelta, dmDelta, pendingDelta);
+    }
+
+    // Update previous counts
+    previousTotalUnread = currentTotalUnread;
+    previousDmUnread = currentDmUnread;
+    previousPendingCount = currentPendingCount;
+}
+
+/**
+ * Update app icon badge (Android/Desktop)
+ * Shows total unread count across channels + DMs + pending
+ */
+function updateAppBadge() {
+    if (!('setAppBadge' in navigator)) {
+        // Badge API not supported
+        return;
+    }
+
+    // Calculate total unread
+    const channelUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
+
+    const dmBadge = document.querySelector('.fab-badge-dm');
+    const dmUnread = dmBadge ? parseInt(dmBadge.textContent) || 0 : 0;
+
+    const pendingBadge = document.querySelector('.fab-badge-pending');
+    const pendingUnread = pendingBadge ? parseInt(pendingBadge.textContent) || 0 : 0;
+
+    const totalUnread = channelUnread + dmUnread + pendingUnread;
+
+    if (totalUnread > 0) {
+        navigator.setAppBadge(totalUnread).catch((error) => {
+            console.error('Error setting app badge:', error);
+        });
+    } else {
+        navigator.clearAppBadge().catch((error) => {
+            console.error('Error clearing app badge:', error);
+        });
+    }
+}
+
 /**
  * Update connection status indicator
  */
@@ -872,6 +1115,9 @@ async function checkForUpdates() {
             // Update UI badges
             updateUnreadBadges();
 
+            // Check if we should send browser notification
+            checkAndNotify();
+
             // If current channel has updates, refresh the view
             const currentChannelUpdate = data.channels.find(ch => ch.index === currentChannelIdx);
             if (currentChannelUpdate && currentChannelUpdate.has_updates) {
@@ -914,6 +1160,9 @@ function updateUnreadBadges() {
     // Update notification bell
     const totalUnread = Object.values(unreadCounts).reduce((sum, count) => sum + count, 0);
     updateNotificationBell(totalUnread);
+
+    // Update app icon badge
+    updateAppBadge();
 }
 
 /**
@@ -1377,6 +1626,9 @@ async function checkDmUpdates() {
 
             // Update badges
             updateDmBadges(data.total_unread || 0);
+
+            // Update app icon badge
+            updateAppBadge();
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
@@ -1427,6 +1679,9 @@ async function updatePendingContactsBadge() {
             const count = data.pending?.length || 0;
             // Update FAB badge (orange badge on Contact Management button)
             updateFabBadge('.fab-contacts', 'fab-badge-pending', count);
+
+            // Update app icon badge
+            updateAppBadge();
         }
     } catch (error) {
         console.error('Error updating pending contacts badge:', error);

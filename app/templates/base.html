@@ -63,6 +63,19 @@
                     <i class="bi bi-broadcast-pin" style="font-size: 1.5rem;"></i>
                     <span>Manage Channels</span>
                 </button>
+                <!-- Notifications Toggle -->
+                <button id="notificationsToggle" class="list-group-item list-group-item-action d-flex align-items-center gap-3" type="button">
+                    <i class="bi bi-bell" style="font-size: 1.5rem;"></i>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Powiadomienia</span>
+                            <span id="notificationStatus" class="badge bg-secondary">Wyłączone</span>
+                        </div>
+                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                            Działa gdy app w tle
+                        </small>
+                    </div>
+                </button>
                 <div class="list-group-item">
                     <div class="d-flex align-items-center gap-3 mb-2">
                         <i class="bi bi-calendar3" style="font-size: 1.5rem;"></i>
@@ -275,6 +288,22 @@
                 window.dispatchEvent(new Event('resize'));
             }, 150);
         });
+    </script>
+
+    <!-- Service Worker Registration for PWA -->
+    <script>
+        // Register Service Worker for PWA functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/js/sw.js')
+                    .then((registration) => {
+                        console.log('Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
     </script>
 
     {% block extra_scripts %}{% endblock %}
