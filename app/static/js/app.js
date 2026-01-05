@@ -726,10 +726,20 @@ async function handleNotificationToggle() {
     const permission = getNotificationPermission();
 
     if (permission === 'granted') {
-        // Already granted - toggle off
-        localStorage.setItem('mc_notifications_enabled', 'false');
-        updateNotificationToggleUI();
-        showNotification('Notifications disabled', 'info');
+        // Permission granted - toggle between enabled/disabled
+        const isCurrentlyEnabled = localStorage.getItem('mc_notifications_enabled') === 'true';
+
+        if (isCurrentlyEnabled) {
+            // Turn OFF
+            localStorage.setItem('mc_notifications_enabled', 'false');
+            updateNotificationToggleUI();
+            showNotification('Notifications disabled', 'info');
+        } else {
+            // Turn ON
+            localStorage.setItem('mc_notifications_enabled', 'true');
+            updateNotificationToggleUI();
+            showNotification('Notifications enabled', 'success');
+        }
     } else if (permission === 'denied') {
         // Blocked - show help message
         showNotification('Notifications are blocked. Change browser settings: Settings → Site Settings → Notifications', 'warning');
