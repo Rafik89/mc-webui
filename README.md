@@ -33,6 +33,11 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - 📦 **Message archiving** - Automatic daily archiving with browse-by-date selector
 - ⚡ **Efficient polling** - Lightweight update checks every 10s, UI refreshes only when needed
 - 📡 **Network commands** - Send advertisement (advert) or flood advertisement (floodadv) for network management
+- 🔔 **PWA notifications** - Browser notifications for new messages when app is hidden (experimental)
+  - Desktop notifications with aggregated message counts
+  - App badge counter on home screen icon (Android/Desktop)
+  - Service Worker for PWA installability and offline support
+  - Tested on Windows desktop (Firefox), requires further testing on Android mobile
 
 ## Tech Stack
 
@@ -187,11 +192,13 @@ mc-webui/
 │   ├── static/
 │   │   ├── css/
 │   │   │   └── style.css           # Custom styles
-│   │   └── js/
-│   │       ├── app.js              # Main page frontend logic
-│   │       ├── dm.js               # Direct Messages page logic
-│   │       ├── contacts.js         # Contact Management multi-page logic
-│   │       └── message-utils.js    # Message content processing (mentions, URLs, images)
+│   │   ├── js/
+│   │   │   ├── app.js              # Main page frontend logic
+│   │   │   ├── dm.js               # Direct Messages page logic
+│   │   │   ├── contacts.js         # Contact Management multi-page logic
+│   │   │   ├── message-utils.js    # Message content processing (mentions, URLs, images)
+│   │   │   └── sw.js               # Service Worker for PWA notifications
+│   │   └── manifest.json           # PWA manifest
 │   └── templates/
 │       ├── base.html               # Base template
 │       ├── index.html              # Main chat view
@@ -226,6 +233,7 @@ mc-webui/
 - [x] Direct Messages (DM) - Private messaging with delivery status tracking
 - [x] Advanced Contact Management - Multi-page interface with sorting, filtering, and activity tracking
 - [x] Message Content Enhancements - Mention badges, clickable URLs, and image previews
+- [x] PWA Notifications (Experimental) - Browser notifications and app badge counters (tested on Windows/Firefox, requires testing on Android)
 
 ### Next Steps
 
@@ -539,6 +547,84 @@ Sends advertisement in flooding mode, forcing all nodes to retransmit. **Use onl
 2. Click "Flood Advert" (highlighted in warning color)
 3. Confirm you want to proceed
 4. Wait for confirmation toast
+
+### PWA Notifications (Experimental)
+
+The application supports Progressive Web App (PWA) notifications to alert you of new messages when the app is hidden in the background.
+
+#### Enabling Notifications
+
+1. Click the menu icon (☰) in the navbar
+2. Click "Notifications" in the menu
+3. Browser will request permission - click "Allow"
+4. Status badge will change from "Disabled" to "Enabled" (green)
+
+#### How It Works
+
+**When you'll receive notifications:**
+- App must be running in the background (minimized, not closed)
+- New messages arrive in channels, Direct Messages, or pending contacts
+- Notification shows aggregated count: "New: 2 channels, 1 private message"
+
+**What notifications include:**
+- Total count of new messages across all categories
+- Click notification to bring app back to focus
+- App badge counter on home screen icon (if PWA installed)
+
+**Disabling notifications:**
+- Click "Notifications" button again to toggle off
+- Status badge will change to "Disabled" (gray)
+
+#### Platform Support
+
+**Desktop (Tested):**
+- ✅ **Windows** - Firefox (working correctly)
+- ✅ Chrome/Edge - Should work (not extensively tested)
+
+**Mobile (Experimental):**
+- ⚠️ **Android** - Requires further testing when installed as PWA via Chrome
+  - Install: Chrome menu → "Add to Home Screen"
+  - Known limitation: Android may freeze background JavaScript after 5-10 minutes for battery saving
+  - Notifications will stop working after app is frozen by the OS
+
+**Browser Requirements:**
+- Chrome/Edge 81+ (desktop), 84+ (Android)
+- Firefox 22+
+- Safari 16.4+ (limited support)
+
+#### Installing as PWA (Android/Desktop)
+
+To get the full PWA experience with app badge counters:
+
+**Android:**
+1. Open the app in Chrome
+2. Menu (⋮) → "Add to Home Screen"
+3. Confirm installation
+4. App icon will appear on home screen with badge counter support
+
+**Desktop:**
+1. Open the app in Chrome/Edge
+2. Look for install prompt in address bar (+ icon)
+3. Click "Install"
+4. App opens in standalone window
+
+#### Troubleshooting
+
+**Notifications not appearing:**
+- Verify browser permission granted: Settings → Site Settings → Notifications
+- Ensure app is running in background (not closed)
+- Check that toggle shows "Enabled" (green badge)
+- Try refreshing the page
+
+**Badge counter not showing:**
+- Badge API requires PWA to be installed (not just bookmarked)
+- Check browser compatibility (Chrome/Edge recommended)
+
+**Android-specific issues:**
+- After 5-10 minutes in background, Android may freeze the app
+- This is normal OS behavior for battery saving
+- Reopen app to resume notifications
+- Full "wake device" support would require Web Push API (not implemented)
 
 ## Docker Commands
 
