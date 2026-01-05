@@ -40,6 +40,11 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
   - App badge counter on home screen icon (Android/Desktop)
   - Service Worker for PWA installability and offline support
   - Tested on Windows desktop (Firefox), requires further testing on Android mobile
+- 📴 **Full offline support** - Works without internet connection
+  - Bootstrap CSS/JS and icons hosted locally (no CDN dependency)
+  - Service Worker caches all UI assets automatically
+  - Hybrid caching strategy: cache-first for libraries, network-first for app updates
+  - Perfect for mesh networks operating in remote/emergency scenarios
 
 ## Tech Stack
 
@@ -236,6 +241,7 @@ mc-webui/
 - [x] Advanced Contact Management - Multi-page interface with sorting, filtering, and activity tracking
 - [x] Message Content Enhancements - Mention badges, clickable URLs, and image previews
 - [x] PWA Notifications (Experimental) - Browser notifications and app badge counters (tested on Windows/Firefox, requires testing on Android)
+- [x] Full Offline Support - Local Bootstrap libraries and Service Worker caching for internet-free operation
 
 ### Next Steps
 

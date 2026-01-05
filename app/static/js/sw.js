@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mc-webui-v1';
+const CACHE_NAME = 'mc-webui-v2';
 const ASSETS_TO_CACHE = [
     '/',
     '/static/css/style.css',
@@ -7,7 +7,14 @@ const ASSETS_TO_CACHE = [
     '/static/js/contacts.js',
     '/static/js/message-utils.js',
     '/static/images/android-chrome-192x192.png',
-    '/static/images/android-chrome-512x512.png'
+    '/static/images/android-chrome-512x512.png',
+    // Bootstrap 5.3.2 (local)
+    '/static/vendor/bootstrap/css/bootstrap.min.css',
+    '/static/vendor/bootstrap/js/bootstrap.bundle.min.js',
+    // Bootstrap Icons 1.11.2 (local)
+    '/static/vendor/bootstrap-icons/bootstrap-icons.css',
+    '/static/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2',
+    '/static/vendor/bootstrap-icons/fonts/bootstrap-icons.woff'
 ];
 
 // Install event - cache core assets
@@ -32,10 +39,32 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// Fetch event - network first, fallback to cache (for dynamic content like messages)
+// Fetch event - hybrid strategy:
+// - Cache-first for vendor libraries (static, unchanging)
+// - Network-first for app content (dynamic, needs updates)
 self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        fetch(event.request)
-            .catch(() => caches.match(event.request))
-    );
+    const url = new URL(event.request.url);
+
+    // Cache-first for vendor libraries (Bootstrap, Icons)
+    if (url.pathname.includes('/static/vendor/')) {
+        event.respondWith(
+            caches.match(event.request)
+                .then((cachedResponse) => {
+                    return cachedResponse || fetch(event.request)
+                        .then((response) => {
+                            // Cache the fetched vendor file for future use
+                            return caches.open(CACHE_NAME).then((cache) => {
+                                cache.put(event.request, response.clone());
+                                return response;
+                            });
+                        });
+                })
+        );
+    } else {
+        // Network-first for everything else (app code, API calls, dynamic content)
+        event.respondWith(
+            fetch(event.request)
+                .catch(() => caches.match(event.request))
+        );
+    }
 });
