@@ -180,14 +180,9 @@
 </head>
 <body>
     <div class="console-container">
-        <!-- Header -->
+        <!-- Header with status indicator -->
         <div class="console-header d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="mb-0 text-white">
-                    <i class="bi bi-terminal"></i> meshcli Console
-                </h6>
-                <small class="text-muted">{{ device_name }}</small>
-            </div>
+            <small class="text-muted">{{ device_name }}</small>
             <div class="d-flex align-items-center gap-2">
                 <span class="status-dot" id="statusDot"></span>
                 <small class="text-muted" id="statusText">Connecting...</small>
@@ -226,13 +221,5 @@
     <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <!-- Console JS -->
     <script src="{{ url_for('static', filename='js/console.js') }}"></script>
-
-    <script>
-        // Pass configuration from Flask to JavaScript
-        window.MC_CONFIG = {
-            bridgeWsUrl: "{{ bridge_ws_url }}",
-            deviceName: "{{ device_name }}"
-        };
-    </script>
 </body>
 </html>

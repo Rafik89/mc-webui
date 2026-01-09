@@ -20,20 +20,18 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Connect to WebSocket server on meshcore-bridge
+ * Connect to WebSocket server (proxied through main Flask app)
  */
 function connectWebSocket() {
     updateStatus('connecting');
 
-    // Get WebSocket URL - bridge runs on port 5001
-    // Use same hostname as current page but different port
-    const bridgeUrl = window.MC_CONFIG?.bridgeWsUrl ||
-                      `${window.location.protocol}//${window.location.hostname}:5001`;
+    // Connect to same origin - WebSocket is proxied through main Flask app
+    const wsUrl = window.location.origin;
 
-    console.log('Connecting to WebSocket:', bridgeUrl);
+    console.log('Connecting to WebSocket:', wsUrl);
 
     try {
-        socket = io(bridgeUrl + '/console', {
+        socket = io(wsUrl + '/console', {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: Infinity,

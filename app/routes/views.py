@@ -77,18 +77,11 @@ def console():
     """
     Interactive meshcli console - chat-style command interface.
 
-    Connects via WebSocket to meshcore-bridge for real-time command execution.
+    WebSocket connection is handled by the main Flask app and proxied to bridge.
     """
-    # Build WebSocket URL for meshcore-bridge
-    # Browser connects directly to bridge on port 5001
-    # Use the same hostname the user is accessing but with port 5001
-    host = request.host.split(':')[0]  # Get hostname without port
-    bridge_ws_url = f"http://{host}:5001"
-
     return render_template(
         'console.html',
-        device_name=config.MC_DEVICE_NAME,
-        bridge_ws_url=bridge_ws_url
+        device_name=config.MC_DEVICE_NAME
     )
 
 

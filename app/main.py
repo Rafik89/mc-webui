@@ -3,7 +3,9 @@ mc-webui - Flask application entry point
 """
 
 import logging
+import requests
 from flask import Flask
+from flask_socketio import SocketIO, emit
 from app.config import config
 from app.routes.views import views_bp
 from app.routes.api import api_bp
@@ -17,6 +19,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Initialize SocketIO globally
+socketio = SocketIO()
+
 
 def create_app():
     """Create and configure Flask application"""
@@ -29,6 +34,9 @@ def create_app():
     # Register blueprints
     app.register_blueprint(views_bp)
     app.register_blueprint(api_bp)
+
+    # Initialize SocketIO with the app
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='gevent')
 
     # Initialize archive scheduler if enabled
     if config.MC_ARCHIVE_ENABLED:
@@ -44,9 +52,93 @@ def create_app():
     return app
 
 
+# ============================================================
+# WebSocket handlers for Console
+# ============================================================
+
+@socketio.on('connect', namespace='/console')
+def handle_console_connect():
+    """Handle console WebSocket connection"""
+    logger.info("Console WebSocket client connected")
+    emit('console_status', {'message': 'Connected to mc-webui console proxy'})
+
+
+@socketio.on('disconnect', namespace='/console')
+def handle_console_disconnect():
+    """Handle console WebSocket disconnection"""
+    logger.info("Console WebSocket client disconnected")
+
+
+@socketio.on('send_command', namespace='/console')
+def handle_send_command(data):
+    """Handle command from console client - proxy to bridge via HTTP"""
+    command = data.get('command', '').strip()
+
+    if not command:
+        emit('command_response', {
+            'success': False,
+            'error': 'Empty command'
+        })
+        return
+
+    logger.info(f"Console command received: {command}")
+
+    # Execute command via bridge HTTP API
+    def execute_and_respond():
+        try:
+            bridge_url = f"http://{config.MC_BRIDGE_HOST}:{config.MC_BRIDGE_PORT}/cli"
+            response = requests.post(
+                bridge_url,
+                json={'command': command},
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                output = result.get('output', '')
+                # Handle list output (join with newlines)
+                if isinstance(output, list):
+                    output = '\n'.join(output)
+                emit('command_response', {
+                    'success': True,
+                    'command': command,
+                    'output': output
+                })
+            else:
+                emit('command_response', {
+                    'success': False,
+                    'command': command,
+                    'error': f'Bridge returned status {response.status_code}'
+                })
+
+        except requests.exceptions.Timeout:
+            emit('command_response', {
+                'success': False,
+                'command': command,
+                'error': 'Command timed out'
+            })
+        except requests.exceptions.ConnectionError:
+            emit('command_response', {
+                'success': False,
+                'command': command,
+                'error': 'Cannot connect to meshcore-bridge'
+            })
+        except Exception as e:
+            logger.error(f"Console command error: {e}")
+            emit('command_response', {
+                'success': False,
+                'command': command,
+                'error': str(e)
+            })
+
+    # Run in background to not block
+    socketio.start_background_task(execute_and_respond)
+
+
 if __name__ == '__main__':
     app = create_app()
-    app.run(
+    socketio.run(
+        app,
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
         debug=config.FLASK_DEBUG
