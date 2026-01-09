@@ -4,7 +4,7 @@ mc-webui - Flask application entry point
 
 import logging
 import requests
-from flask import Flask
+from flask import Flask, request as flask_request
 from flask_socketio import SocketIO, emit
 from app.config import config
 from app.routes.views import views_bp
@@ -73,6 +73,8 @@ def handle_console_disconnect():
 def handle_send_command(data):
     """Handle command from console client - proxy to bridge via HTTP"""
     command = data.get('command', '').strip()
+    # Capture socket ID for use in background task
+    sid = flask_request.sid
 
     if not command:
         emit('command_response', {
@@ -99,37 +101,37 @@ def handle_send_command(data):
                 # Handle list output (join with newlines)
                 if isinstance(output, list):
                     output = '\n'.join(output)
-                emit('command_response', {
+                socketio.emit('command_response', {
                     'success': True,
                     'command': command,
                     'output': output
-                })
+                }, room=sid, namespace='/console')
             else:
-                emit('command_response', {
+                socketio.emit('command_response', {
                     'success': False,
                     'command': command,
                     'error': f'Bridge returned status {response.status_code}'
-                })
+                }, room=sid, namespace='/console')
 
         except requests.exceptions.Timeout:
-            emit('command_response', {
+            socketio.emit('command_response', {
                 'success': False,
                 'command': command,
                 'error': 'Command timed out'
-            })
+            }, room=sid, namespace='/console')
         except requests.exceptions.ConnectionError:
-            emit('command_response', {
+            socketio.emit('command_response', {
                 'success': False,
                 'command': command,
                 'error': 'Cannot connect to meshcore-bridge'
-            })
+            }, room=sid, namespace='/console')
         except Exception as e:
             logger.error(f"Console command error: {e}")
-            emit('command_response', {
+            socketio.emit('command_response', {
                 'success': False,
                 'command': command,
                 'error': str(e)
-            })
+            }, room=sid, namespace='/console')
 
     # Run in background to not block
     socketio.start_background_task(execute_and_respond)
