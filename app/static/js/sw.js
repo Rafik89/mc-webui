@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mc-webui-v3';
+const CACHE_NAME = 'mc-webui-v4';
 const ASSETS_TO_CACHE = [
     '/',
     '/static/css/style.css',
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
     '/static/js/dm.js',
     '/static/js/contacts.js',
     '/static/js/message-utils.js',
+    '/static/js/console.js',
     '/static/images/android-chrome-192x192.png',
     '/static/images/android-chrome-512x512.png',
     // Bootstrap 5.3.2 (local)
@@ -19,7 +20,11 @@ const ASSETS_TO_CACHE = [
     '/static/vendor/emoji-picker-element/index.js',
     '/static/vendor/emoji-picker-element/picker.js',
     '/static/vendor/emoji-picker-element/database.js',
-    '/static/vendor/emoji-picker-element-data/en/emojibase/data.json'
+    '/static/vendor/emoji-picker-element-data/en/emojibase/data.json',
+    // Socket.IO client 4.x (local)
+    '/static/vendor/socket.io/socket.io.min.js',
+    // Console page
+    '/console'
 ];
 
 // Install event - cache core assets

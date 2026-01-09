@@ -18,8 +18,10 @@ import time
 import json
 import queue
 import uuid
+import shlex
 from pathlib import Path
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO, emit
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +30,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Initialize SocketIO with gevent for async support
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Configuration
 MC_SERIAL_PORT = os.getenv('MC_SERIAL_PORT', '/dev/ttyUSB0')
@@ -275,6 +280,18 @@ class MeshCLISession:
                         logger.info(f"Command [{cmd_id}] completed (timeout-based)")
                         response_dict["done"] = True
                         event.set()
+
+                        # If this is a WebSocket command, emit response to that client
+                        if cmd_id.startswith("ws_"):
+                            socket_id = response_dict.get("socket_id")
+                            if socket_id:
+                                output = '\n'.join(response_dict.get("response", []))
+                                socketio.emit('command_response', {
+                                    'success': True,
+                                    'output': output,
+                                    'cmd_id': cmd_id
+                                }, room=socket_id, namespace='/console')
+
                         if self.current_cmd_id == cmd_id:
                             self.current_cmd_id = None
                         return
@@ -428,6 +445,73 @@ class MeshCLISession:
             'stderr': '',
             'returncode': 0
         }
+
+    def execute_ws_command(self, command_text, socket_id, timeout=DEFAULT_TIMEOUT):
+        """
+        Execute a CLI command from WebSocket client.
+
+        The response will be emitted via socketio.emit in _monitor_response_timeout.
+
+        Args:
+            command_text: Raw command string from user
+            socket_id: WebSocket session ID for response routing
+            timeout: Max time to wait for response
+
+        Returns:
+            Dict with success status (response already emitted via WebSocket)
+        """
+        cmd_id = f"ws_{uuid.uuid4().hex[:8]}"
+
+        # Parse command into args (respects quotes)
+        try:
+            args = shlex.split(command_text)
+        except ValueError:
+            args = command_text.split()
+
+        # Build command line - use double quotes for args with spaces/special chars
+        quoted_args = []
+        for arg in args:
+            if ' ' in arg or '"' in arg or "'" in arg:
+                escaped = arg.replace('"', '\\"')
+                quoted_args.append(f'"{escaped}"')
+            else:
+                quoted_args.append(arg)
+
+        command = ' '.join(quoted_args)
+        event = threading.Event()
+        response_dict = {
+            "event": event,
+            "response": [],
+            "done": False,
+            "error": None,
+            "last_line_time": time.time(),
+            "socket_id": socket_id  # Track which WebSocket client sent this
+        }
+
+        # Queue command
+        self.command_queue.put((cmd_id, command, event, response_dict))
+        logger.info(f"WebSocket command [{cmd_id}] queued: {command}")
+
+        # Wait for completion
+        if not event.wait(timeout):
+            logger.error(f"WebSocket command [{cmd_id}] timeout after {timeout}s")
+
+            # Cleanup
+            with self.pending_lock:
+                if cmd_id in self.pending_commands:
+                    del self.pending_commands[cmd_id]
+
+            # Emit error to client
+            socketio.emit('command_response', {
+                'success': False,
+                'error': f'Command timeout after {timeout} seconds',
+                'cmd_id': cmd_id
+            }, room=socket_id, namespace='/console')
+
+            return {'success': False, 'error': f'Command timeout after {timeout}s'}
+
+        # Response already emitted in _monitor_response_timeout
+        return {'success': True}
 
     def shutdown(self):
         """Gracefully shutdown session"""
@@ -789,6 +873,43 @@ def set_manual_add_contacts():
         }), 500
 
 
+# =============================================================================
+# WebSocket handlers for console
+# =============================================================================
+
+@socketio.on('connect', namespace='/console')
+def console_connect():
+    """Handle console client connection"""
+    logger.info(f"Console client connected: {request.sid}")
+    emit('console_status', {'status': 'connected', 'message': 'Connected to meshcli'})
+
+
+@socketio.on('disconnect', namespace='/console')
+def console_disconnect():
+    """Handle console client disconnection"""
+    logger.info(f"Console client disconnected: {request.sid}")
+
+
+@socketio.on('send_command', namespace='/console')
+def handle_console_command(data):
+    """Handle command from console client"""
+    if not meshcli_session or not meshcli_session.process:
+        emit('command_response', {'success': False, 'error': 'meshcli session not available'})
+        return
+
+    command_text = data.get('command', '').strip()
+    if not command_text:
+        return
+
+    logger.info(f"Console command from {request.sid}: {command_text}")
+
+    # Execute command asynchronously using socketio background task
+    def execute_async():
+        meshcli_session.execute_ws_command(command_text, request.sid)
+
+    socketio.start_background_task(execute_async)
+
+
 if __name__ == '__main__':
     logger.info(f"Starting MeshCore Bridge on port 5001")
     logger.info(f"Serial port: {MC_SERIAL_PORT}")
@@ -807,5 +928,5 @@ if __name__ == '__main__':
         logger.error(f"Failed to initialize meshcli session: {e}")
         logger.error("Bridge will start but /cli endpoint will be unavailable")
 
-    # Run on all interfaces to allow Docker network access
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    # Run with SocketIO (supports WebSocket) on all interfaces
+    socketio.run(app, host='0.0.0.0', port=5001, debug=False)

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Console - mc-webui</title>
+
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
+    <!-- Bootstrap 5 CSS (local) -->
+    <link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Bootstrap Icons (local) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            background-color: #1a1a2e;
+        }
+
+        .console-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .console-header {
+            background-color: #16213e;
+            border-bottom: 1px solid #0f3460;
+            padding: 0.75rem 1rem;
+            flex-shrink: 0;
+        }
+
+        .console-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background-color: #1a1a2e;
+            min-height: 0;
+        }
+
+        .console-message {
+            margin-bottom: 1rem;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.9rem;
+        }
+
+        .console-message.command {
+            color: #00ff88;
+        }
+
+        .console-message.command::before {
+            content: '> ';
+            color: #888;
+        }
+
+        .console-message.response {
+            color: #e0e0e0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background-color: #16213e;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            border-left: 3px solid #0f3460;
+        }
+
+        .console-message.error {
+            color: #ff6b6b;
+        }
+
+        .console-message.system {
+            color: #4ecdc4;
+            font-style: italic;
+        }
+
+        .console-input-area {
+            background-color: #16213e;
+            border-top: 1px solid #0f3460;
+            padding: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .console-input {
+            background-color: #0f3460;
+            border: 1px solid #1a1a2e;
+            color: #00ff88;
+            font-family: 'Courier New', Consolas, monospace;
+        }
+
+        .console-input:focus {
+            background-color: #0f3460;
+            border-color: #00ff88;
+            color: #00ff88;
+            box-shadow: 0 0 0 0.2rem rgba(0, 255, 136, 0.25);
+        }
+
+        .console-input::placeholder {
+            color: #666;
+        }
+
+        .console-input:disabled {
+            background-color: #0a1628;
+            color: #444;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.connected {
+            background-color: #00ff88;
+        }
+
+        .status-dot.disconnected {
+            background-color: #ff6b6b;
+        }
+
+        .status-dot.connecting {
+            background-color: #ffd93d;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Loading spinner for pending commands */
+        .console-message.pending::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #4ecdc4;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 576px) {
+            .console-header {
+                padding: 0.5rem 0.75rem;
+            }
+
+            .console-header h6 {
+                font-size: 0.9rem;
+            }
+
+            .console-messages {
+                padding: 0.5rem;
+            }
+
+            .console-message {
+                font-size: 0.8rem;
+            }
+
+            .console-input-area {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="console-container">
+        <!-- Header -->
+        <div class="console-header d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-0 text-white">
+                    <i class="bi bi-terminal"></i> meshcli Console
+                </h6>
+                <small class="text-muted">{{ device_name }}</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-dot" id="statusDot"></span>
+                <small class="text-muted" id="statusText">Connecting...</small>
+            </div>
+        </div>
+
+        <!-- Messages Area -->
+        <div class="console-messages" id="consoleMessages">
+            <div class="console-message system">
+                Type a meshcli command and press Enter.
+                Examples: infos, contacts, help
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="console-input-area">
+            <form id="consoleForm" class="d-flex gap-2">
+                <input type="text"
+                       id="commandInput"
+                       class="form-control console-input"
+                       placeholder="Enter command..."
+                       autocomplete="off"
+                       autocapitalize="off"
+                       spellcheck="false"
+                       disabled>
+                <button type="submit" class="btn btn-success" id="sendBtn" disabled>
+                    <i class="bi bi-send"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Socket.IO client -->
+    <script src="{{ url_for('static', filename='vendor/socket.io/socket.io.min.js') }}"></script>
+    <!-- Bootstrap JS Bundle (local) -->
+    <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    <!-- Console JS -->
+    <script src="{{ url_for('static', filename='js/console.js') }}"></script>
+
+    <script>
+        // Pass configuration from Flask to JavaScript
+        window.MC_CONFIG = {
+            bridgeWsUrl: "{{ bridge_ws_url }}",
+            deviceName: "{{ device_name }}"
+        };
+    </script>
+</body>
+</html>

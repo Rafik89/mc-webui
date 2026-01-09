@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     devices:
       - "${MC_SERIAL_PORT}:${MC_SERIAL_PORT}"
+    ports:
+      - "5001:5001"  # Expose for WebSocket console access
     volumes:
       - "${MC_CONFIG_DIR}:/root/.config/meshcore:rw"
     environment:
