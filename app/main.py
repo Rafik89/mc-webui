@@ -105,6 +105,10 @@ def clean_console_output(output: str, command: str) -> str:
     while cleaned_lines and not cleaned_lines[-1].strip():
         cleaned_lines.pop()
 
+    # Strip leading whitespace from first line (leftover from prompt removal)
+    if cleaned_lines:
+        cleaned_lines[0] = cleaned_lines[0].lstrip()
+
     return '\n'.join(cleaned_lines)
 
 
