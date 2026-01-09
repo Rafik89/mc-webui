@@ -3,6 +3,7 @@ mc-webui - Flask application entry point
 """
 
 import logging
+import shlex
 import requests
 from flask import Flask, request as flask_request
 from flask_socketio import SocketIO, emit
@@ -86,25 +87,38 @@ def handle_send_command(data):
     logger.info(f"Console command received: {command}")
 
     # Execute command via bridge HTTP API
+    # Parse command into args list (split by spaces, respecting quotes)
+    try:
+        args = shlex.split(command)
+    except ValueError:
+        args = command.split()
+
     def execute_and_respond():
         try:
             response = requests.post(
                 config.MC_BRIDGE_URL,
-                json={'command': command},
-                timeout=30
+                json={'args': args, 'timeout': 30},
+                timeout=35
             )
 
             if response.status_code == 200:
                 result = response.json()
-                output = result.get('output', '')
-                # Handle list output (join with newlines)
-                if isinstance(output, list):
-                    output = '\n'.join(output)
-                socketio.emit('command_response', {
-                    'success': True,
-                    'command': command,
-                    'output': output
-                }, room=sid, namespace='/console')
+                if result.get('success'):
+                    output = result.get('stdout', '').strip()
+                    if not output:
+                        output = '(no output)'
+                    socketio.emit('command_response', {
+                        'success': True,
+                        'command': command,
+                        'output': output
+                    }, room=sid, namespace='/console')
+                else:
+                    error = result.get('stderr', 'Unknown error')
+                    socketio.emit('command_response', {
+                        'success': False,
+                        'command': command,
+                        'error': error
+                    }, room=sid, namespace='/console')
             else:
                 socketio.emit('command_response', {
                     'success': False,
