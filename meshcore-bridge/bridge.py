@@ -90,11 +90,10 @@ class MeshCLISession:
         logger.info(f"Starting meshcli session on {self.serial_port}")
 
         try:
-            # Set terminal size env vars for meshcli (prevents os.get_terminal_size() errors)
+            # Set terminal size env vars for meshcli (fallback for os.get_terminal_size())
             env = os.environ.copy()
             env['COLUMNS'] = '120'
             env['LINES'] = '40'
-            env['TERM'] = 'dumb'
 
             self.process = subprocess.Popen(
                 ['meshcli', '-s', self.serial_port],
