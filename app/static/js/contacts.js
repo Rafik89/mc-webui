@@ -701,6 +701,11 @@ async function loadPendingContacts() {
                 // Show empty state
                 if (emptyEl) emptyEl.style.display = 'block';
                 if (countBadge) countBadge.style.display = 'none';
+
+                // Reset filtered count badge when no contacts match type filter
+                const filteredCountBadge = document.getElementById('filteredCountBadge');
+                if (filteredCountBadge) filteredCountBadge.textContent = '0';
+                filteredPendingContacts = [];
             } else {
                 // Initialize filtered list and apply filters (default: CLI only)
                 filteredPendingContacts = [...pendingContacts];
