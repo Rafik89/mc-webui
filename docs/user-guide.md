@@ -396,6 +396,7 @@ To get the full PWA experience with app badge counters:
 ## Getting Help
 
 - **Full README:** [README.md](../README.md)
+- **Repeater Management:** [rpt-mgmt.md](rpt-mgmt.md)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)
 - **Architecture:** [architecture.md](architecture.md)
 - **MeshCore docs:** https://meshcore.org
