@@ -139,6 +139,36 @@ For complete usage instructions, see the [User Guide](docs/user-guide.md).
 
 ---
 
+## Updating
+
+To update mc-webui to the latest version:
+
+```bash
+cd ~/mc-webui
+git pull
+docker compose up -d --build
+```
+
+**Testing experimental features:**
+
+The `dev` branch contains new features that are still being tested:
+
+```bash
+git checkout dev
+git pull
+docker compose up -d --build
+```
+
+To return to the stable version:
+
+```bash
+git checkout main
+git pull
+docker compose up -d --build
+```
+
+---
+
 ## Gallery
 
 <img src="images/main_window.png" alt="Main Chat Window" width="200px"> <img src="images/unread_msgs.png" alt="Unread messages" width="200px"> <img src="images/menu.png" alt="Menu" width="200px"> <img src="images/dm.png" alt="Direct Messages" width="200px"> <img src="images/channel_management.png" alt="Channel management" width="200px"> <img src="images/msg_archive.png" alt="Message history" width="200px"> <img src="images/contact_management.png" alt="Contact management" width="200px"> <img src="images/approve_contact.png" alt="Pending contacts" width="200px"> <img src="images/existing_contacts.png" alt="Existing contacts" width="200px">
