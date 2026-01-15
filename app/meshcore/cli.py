@@ -5,6 +5,7 @@ MeshCore CLI wrapper - executes meshcli commands via HTTP bridge
 import logging
 import re
 import json
+import time
 import requests
 from pathlib import Path
 from typing import Tuple, Optional, List, Dict
@@ -965,3 +966,50 @@ def set_manual_add_contacts(enabled: bool) -> Tuple[bool, str]:
         return False, 'Cannot connect to meshcore-bridge service'
     except Exception as e:
         return False, str(e)
+
+
+# =============================================================================
+# Device Name Detection
+# =============================================================================
+
+def fetch_device_name_from_bridge(max_retries: int = 3, retry_delay: float = 2.0) -> Tuple[Optional[str], str]:
+    """
+    Fetch detected device name from meshcore-bridge /health endpoint.
+
+    The bridge auto-detects device name from meshcli prompt ("DeviceName|*")
+    and exposes it via /health endpoint.
+
+    Args:
+        max_retries: Number of retry attempts if bridge is unavailable
+        retry_delay: Delay between retries in seconds
+
+    Returns:
+        Tuple of (device_name, source)
+        - device_name: Detected name or fallback from config
+        - source: "detected", "config", or "fallback"
+    """
+    bridge_health_url = config.MC_BRIDGE_URL.replace('/cli', '/health')
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(bridge_health_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'healthy':
+                    device_name = data.get('device_name')
+                    source = data.get('device_name_source', 'unknown')
+                    if device_name:
+                        logger.info(f"Got device name from bridge: {device_name} (source: {source})")
+                        return device_name, source
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"Bridge not reachable, attempt {attempt + 1}/{max_retries}")
+        except requests.exceptions.Timeout:
+            logger.warning(f"Bridge timeout, attempt {attempt + 1}/{max_retries}")
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} failed: {e}")
+
+        if attempt < max_retries - 1:
+            time.sleep(retry_delay)
+
+    logger.warning(f"Using fallback device name: {config.MC_DEVICE_NAME}")
+    return config.MC_DEVICE_NAME, "fallback"

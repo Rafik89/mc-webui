@@ -11,7 +11,7 @@ from datetime import datetime
 from io import BytesIO
 from flask import Blueprint, jsonify, request, send_file
 from app.meshcore import cli, parser
-from app.config import config
+from app.config import config, runtime_config
 from app.archiver import manager as archive_manager
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,8 @@ def get_status():
         return jsonify({
             'success': True,
             'connected': connected,
-            'device_name': config.MC_DEVICE_NAME,
+            'device_name': runtime_config.get_device_name(),
+            'device_name_source': runtime_config.get_device_name_source(),
             'serial_port': config.MC_SERIAL_PORT,
             'message_count': message_count,
             'latest_message_timestamp': latest_timestamp

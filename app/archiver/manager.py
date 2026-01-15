@@ -11,7 +11,7 @@ from typing import List, Dict, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.config import config
+from app.config import config, runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def get_archive_path(archive_date: str) -> Path:
         Path to archive file
     """
     archive_dir = config.archive_dir_path
-    filename = f"{config.MC_DEVICE_NAME}.{archive_date}.msgs"
+    filename = f"{runtime_config.get_device_name()}.{archive_date}.msgs"
     return archive_dir / filename
 
 
@@ -66,7 +66,7 @@ def archive_messages(archive_date: Optional[str] = None) -> Dict[str, any]:
         archive_dir.mkdir(parents=True, exist_ok=True)
 
         # Get source .msgs file
-        source_file = config.msgs_file_path
+        source_file = runtime_config.get_msgs_file_path()
         if not source_file.exists():
             logger.warning(f"Source messages file not found: {source_file}")
             return {
@@ -129,14 +129,14 @@ def list_archives() -> List[Dict]:
             return []
 
         # Pattern: {device_name}.YYYY-MM-DD.msgs
-        pattern = f"{config.MC_DEVICE_NAME}.*.msgs"
+        pattern = f"{runtime_config.get_device_name()}.*.msgs"
 
         for archive_file in archive_dir.glob(pattern):
             try:
                 # Extract date from filename
                 # Format: DeviceName.YYYY-MM-DD.msgs
                 filename = archive_file.name
-                date_part = filename.replace(f"{config.MC_DEVICE_NAME}.", "").replace(".msgs", "")
+                date_part = filename.replace(f"{runtime_config.get_device_name()}.", "").replace(".msgs", "")
 
                 # Validate date format
                 try:

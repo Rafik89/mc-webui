@@ -3,7 +3,11 @@ Configuration module - loads settings from environment variables
 """
 
 import os
+import logging
 from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -51,3 +55,40 @@ class Config:
 
 # Global config instance
 config = Config()
+
+
+class RuntimeConfig:
+    """
+    Runtime configuration that can be updated after startup.
+
+    Used for values that are detected/fetched at runtime, like
+    device name from bridge auto-detection.
+    """
+    _device_name: Optional[str] = None
+    _device_name_source: str = "config"
+
+    @classmethod
+    def set_device_name(cls, name: str, source: str = "detected"):
+        """Set the runtime device name"""
+        cls._device_name = name
+        cls._device_name_source = source
+        logger.info(f"Runtime device name set: {name} (source: {source})")
+
+    @classmethod
+    def get_device_name(cls) -> str:
+        """Get device name - prefers runtime value, falls back to config"""
+        return cls._device_name or config.MC_DEVICE_NAME
+
+    @classmethod
+    def get_device_name_source(cls) -> str:
+        """Get the source of the device name (detected/config/fallback)"""
+        return cls._device_name_source
+
+    @classmethod
+    def get_msgs_file_path(cls) -> Path:
+        """Get the full path to the .msgs file using runtime device name"""
+        return Path(config.MC_CONFIG_DIR) / f"{cls.get_device_name()}.msgs"
+
+
+# Global runtime config instance
+runtime_config = RuntimeConfig()

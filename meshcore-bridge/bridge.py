@@ -19,6 +19,7 @@ import json
 import queue
 import uuid
 import shlex
+import re
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, emit
@@ -56,6 +57,10 @@ class MeshCLISession:
         self.serial_port = serial_port
         self.config_dir = Path(config_dir)
         self.device_name = device_name
+
+        # Auto-detected device name from meshcli prompt
+        self.detected_name = None
+        self.name_detection_done = threading.Event()
 
         # Ensure config directory exists
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -178,6 +183,37 @@ class MeshCLISession:
             except Exception as e:
                 logger.error(f"Failed to apply session settings: {e}")
 
+        # Wait for device name detection from prompt, then fallback to .infos
+        if not self.name_detection_done.wait(timeout=1.0):
+            logger.info("Device name not detected from prompt, trying .infos command")
+            self._detect_name_from_infos()
+
+    def _detect_name_from_infos(self):
+        """Fallback: detect device name via .infos command"""
+        if self.detected_name:
+            return
+
+        try:
+            result = self.execute_command(['.infos'], timeout=5)
+            if result['success'] and result['stdout']:
+                # Try to parse JSON output from .infos
+                stdout = result['stdout'].strip()
+                # Find JSON object in output
+                for line in stdout.split('\n'):
+                    line = line.strip()
+                    if line.startswith('{'):
+                        try:
+                            data = json.loads(line)
+                            if 'name' in data:
+                                self.detected_name = data['name']
+                                logger.info(f"Detected device name from .infos: {self.detected_name}")
+                                self.name_detection_done.set()
+                                return
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.warning(f"Failed to detect device name from .infos: {e}")
+
     def _read_stdout(self):
         """Thread: Read stdout line-by-line, parse adverts vs CLI responses"""
         logger.info("stdout reader thread started")
@@ -190,6 +226,14 @@ class MeshCLISession:
                 line = line.rstrip('\n\r')
                 if not line:
                     continue
+
+                # Detect device name from meshcli prompt: "DeviceName|*" or "DeviceName|*[E]"
+                if not self.detected_name and '|*' in line:
+                    prompt_match = re.match(r'^(.+?)\|\*', line)
+                    if prompt_match:
+                        self.detected_name = prompt_match.group(1).strip()
+                        logger.info(f"Detected device name from prompt: {self.detected_name}")
+                        self.name_detection_done.set()
 
                 # Try to parse as JSON advert
                 if self._is_advert_json(line):
@@ -540,13 +584,24 @@ meshcli_session = None
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Health check endpoint"""
+    """Health check endpoint with device name detection info"""
     session_status = "healthy" if meshcli_session and meshcli_session.process and meshcli_session.process.poll() is None else "unhealthy"
+
+    # Determine device name and source
+    detected_name = meshcli_session.detected_name if meshcli_session else None
+    device_name = detected_name or MC_DEVICE_NAME
+    name_source = "detected" if detected_name else "config"
+
+    # Log warning if there's a mismatch between detected and configured names
+    if detected_name and detected_name != MC_DEVICE_NAME:
+        logger.warning(f"Device name mismatch: detected='{detected_name}', configured='{MC_DEVICE_NAME}'")
 
     return jsonify({
         'status': session_status,
         'serial_port': MC_SERIAL_PORT,
-        'advert_log': str(meshcli_session.advert_log_path) if meshcli_session else None
+        'advert_log': str(meshcli_session.advert_log_path) if meshcli_session else None,
+        'device_name': device_name,
+        'device_name_source': name_source
     }), 200
 
 

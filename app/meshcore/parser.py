@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
-from app.config import config
+from app.config import config, runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def parse_message(line: Dict, allowed_channels: Optional[List[int]] = None) -> O
     # Extract sender name
     if is_own:
         # For sent messages, use 'sender' field (meshcore-cli 1.3.12+)
-        sender = line.get('sender', config.MC_DEVICE_NAME)
+        sender = line.get('sender', runtime_config.get_device_name())
         content = text
     else:
         # For received messages, extract sender from "SenderName: message" format
@@ -91,7 +91,7 @@ def read_messages(limit: Optional[int] = None, offset: int = 0, archive_date: Op
     if archive_date:
         return read_archive_messages(archive_date, limit, offset, channel_idx)
 
-    msgs_file = config.msgs_file_path
+    msgs_file = runtime_config.get_msgs_file_path()
 
     if not msgs_file.exists():
         logger.warning(f"Messages file not found: {msgs_file}")
@@ -268,7 +268,7 @@ def delete_channel_messages(channel_idx: int) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    msgs_file = config.msgs_file_path
+    msgs_file = runtime_config.get_msgs_file_path()
 
     if not msgs_file.exists():
         logger.warning(f"Messages file not found: {msgs_file}")
@@ -338,7 +338,7 @@ def _cleanup_old_dm_sent_log() -> None:
         return
 
     try:
-        dm_log_file = Path(config.MC_CONFIG_DIR) / f"{config.MC_DEVICE_NAME}_dm_sent.jsonl"
+        dm_log_file = Path(config.MC_CONFIG_DIR) / f"{runtime_config.get_device_name()}_dm_sent.jsonl"
         if dm_log_file.exists():
             dm_log_file.unlink()
             logger.info(f"Cleaned up old DM sent log: {dm_log_file}")
@@ -420,7 +420,7 @@ def _parse_sent_msg(line: Dict) -> Optional[Dict]:
     timestamp = line.get('timestamp', 0)
     # Use 'recipient' field (added in meshcore-cli 1.3.12), fallback to 'name'
     recipient = line.get('recipient', line.get('name', 'Unknown'))
-    sender = line.get('sender', config.MC_DEVICE_NAME)
+    sender = line.get('sender', runtime_config.get_device_name())
 
     # Generate conversation ID from recipient name
     conversation_id = f"name_{recipient}"
@@ -471,7 +471,7 @@ def read_dm_messages(
     _cleanup_old_dm_sent_log()
 
     # --- Read DM messages from .msgs file ---
-    msgs_file = config.msgs_file_path
+    msgs_file = runtime_config.get_msgs_file_path()
     if msgs_file.exists():
         try:
             with open(msgs_file, 'r', encoding='utf-8') as f:

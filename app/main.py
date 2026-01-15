@@ -5,13 +5,15 @@ mc-webui - Flask application entry point
 import logging
 import re
 import shlex
+import threading
 import requests
 from flask import Flask, request as flask_request
 from flask_socketio import SocketIO, emit
-from app.config import config
+from app.config import config, runtime_config
 from app.routes.views import views_bp
 from app.routes.api import api_bp
 from app.archiver.manager import schedule_daily_archiving
+from app.meshcore.cli import fetch_device_name_from_bridge
 
 # Commands that require longer timeout (in seconds)
 SLOW_COMMANDS = {
@@ -56,6 +58,13 @@ def create_app():
         logger.info(f"Archive scheduler enabled - directory: {config.MC_ARCHIVE_DIR}")
     else:
         logger.info("Archive scheduler disabled")
+
+    # Fetch device name from bridge in background thread
+    def init_device_name():
+        device_name, source = fetch_device_name_from_bridge()
+        runtime_config.set_device_name(device_name, source)
+
+    threading.Thread(target=init_device_name, daemon=True).start()
 
     logger.info(f"mc-webui started - device: {config.MC_DEVICE_NAME}")
     logger.info(f"Messages file: {config.msgs_file_path}")

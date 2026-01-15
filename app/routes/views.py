@@ -4,7 +4,7 @@ HTML views for mc-webui
 
 import logging
 from flask import Blueprint, render_template, request
-from app.config import config
+from app.config import config, runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def index():
     """
     return render_template(
         'index.html',
-        device_name=config.MC_DEVICE_NAME
+        device_name=runtime_config.get_device_name()
     )
 
 
@@ -34,7 +34,7 @@ def direct_messages():
 
     return render_template(
         'dm.html',
-        device_name=config.MC_DEVICE_NAME,
+        device_name=runtime_config.get_device_name(),
         initial_conversation=initial_conversation
     )
 
@@ -46,7 +46,7 @@ def contact_management():
     """
     return render_template(
         'contacts-manage.html',
-        device_name=config.MC_DEVICE_NAME
+        device_name=runtime_config.get_device_name()
     )
 
 
@@ -57,7 +57,7 @@ def contact_pending_list():
     """
     return render_template(
         'contacts-pending.html',
-        device_name=config.MC_DEVICE_NAME
+        device_name=runtime_config.get_device_name()
     )
 
 
@@ -68,7 +68,7 @@ def contact_existing_list():
     """
     return render_template(
         'contacts-existing.html',
-        device_name=config.MC_DEVICE_NAME
+        device_name=runtime_config.get_device_name()
     )
 
 
@@ -81,7 +81,7 @@ def console():
     """
     return render_template(
         'console.html',
-        device_name=config.MC_DEVICE_NAME
+        device_name=runtime_config.get_device_name()
     )
 
 
