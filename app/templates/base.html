@@ -17,6 +17,11 @@
     <!-- Bootstrap Icons (local) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}">
 
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="" />
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
@@ -114,6 +119,14 @@
                     <div>
                         <span>Console</span>
                         <small class="d-block text-muted">Direct meshcli commands</small>
+                    </div>
+                </button>
+                <button class="list-group-item list-group-item-action d-flex align-items-center gap-3"
+                        id="mapBtn" title="Show all contacts with GPS on map">
+                    <i class="bi bi-map" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <span>Map</span>
+                        <small class="d-block text-muted">All contacts with GPS</small>
                     </div>
                 </button>
                 <button class="list-group-item list-group-item-action d-flex align-items-center gap-3" data-bs-toggle="modal" data-bs-target="#settingsModal" data-bs-dismiss="offcanvas">
@@ -262,6 +275,21 @@
         </div>
     </div>
 
+    <!-- Map Modal (Leaflet) -->
+    <div class="modal fade" id="mapModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-geo-alt"></i> <span id="mapModalTitle">Map</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="leafletMap" style="height: 400px; width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast container for notifications -->
     <div class="toast-container position-fixed top-0 start-0 p-3">
         <div id="notificationToast" class="toast" role="alert">
@@ -275,6 +303,11 @@
 
     <!-- Bootstrap 5 JS Bundle (local) -->
     <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
 
     <!-- Message Content Processing Utilities (must load before app.js and dm.js) -->
     <script src="{{ url_for('static', filename='js/message-utils.js') }}"></script>

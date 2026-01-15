@@ -16,6 +16,11 @@ let unreadCounts = {};  // Track unread message counts per channel
 let dmLastSeenTimestamps = {};  // Track last seen DM timestamp per conversation
 let dmUnreadCounts = {};  // Track unread DM counts per conversation
 
+// Map state (Leaflet)
+let leafletMap = null;
+let markersGroup = null;
+let contactsGeoCache = {};  // { 'contactName': { lat, lon }, ... }
+
 /**
  * Global navigation function - closes offcanvas and cleans up before navigation
  * This prevents Bootstrap backdrop/body classes from persisting after page change
@@ -44,6 +49,128 @@ window.navigateTo = function(url) {
         window.location.href = url;
     }, 100);
 };
+
+// =============================================================================
+// Leaflet Map Functions
+// =============================================================================
+
+/**
+ * Initialize Leaflet map (called once on first modal open)
+ */
+function initLeafletMap() {
+    if (leafletMap) return;
+
+    leafletMap = L.map('leafletMap').setView([52.0, 19.0], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(leafletMap);
+
+    markersGroup = L.layerGroup().addTo(leafletMap);
+}
+
+/**
+ * Show single contact on map
+ */
+function showContactOnMap(name, lat, lon) {
+    const modalEl = document.getElementById('mapModal');
+    const modal = new bootstrap.Modal(modalEl);
+    document.getElementById('mapModalTitle').textContent = name;
+
+    const onShown = function() {
+        initLeafletMap();
+        markersGroup.clearLayers();
+
+        L.marker([lat, lon])
+            .addTo(markersGroup)
+            .bindPopup(`<b>${name}</b>`)
+            .openPopup();
+
+        leafletMap.setView([lat, lon], 13);
+        leafletMap.invalidateSize();
+
+        modalEl.removeEventListener('shown.bs.modal', onShown);
+    };
+
+    modalEl.addEventListener('shown.bs.modal', onShown);
+    modal.show();
+}
+
+// Make showContactOnMap available globally (for contacts.js)
+window.showContactOnMap = showContactOnMap;
+
+/**
+ * Show all contacts with GPS on map
+ */
+async function showAllContactsOnMap() {
+    const modalEl = document.getElementById('mapModal');
+    const modal = new bootstrap.Modal(modalEl);
+    document.getElementById('mapModalTitle').textContent = 'All Contacts';
+
+    const onShown = async function() {
+        initLeafletMap();
+        markersGroup.clearLayers();
+
+        try {
+            const response = await fetch('/api/contacts/detailed');
+            const data = await response.json();
+
+            if (data.success && data.contacts) {
+                const contactsWithGps = data.contacts.filter(c =>
+                    c.adv_lat && c.adv_lon && (c.adv_lat !== 0 || c.adv_lon !== 0)
+                );
+
+                if (contactsWithGps.length === 0) {
+                    leafletMap.setView([52.0, 19.0], 6);
+                } else {
+                    const bounds = [];
+                    contactsWithGps.forEach(c => {
+                        L.marker([c.adv_lat, c.adv_lon])
+                            .addTo(markersGroup)
+                            .bindPopup(`<b>${c.name}</b>`);
+                        bounds.push([c.adv_lat, c.adv_lon]);
+                    });
+
+                    if (bounds.length === 1) {
+                        leafletMap.setView(bounds[0], 13);
+                    } else {
+                        leafletMap.fitBounds(bounds, { padding: [20, 20] });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error loading contacts for map:', err);
+        }
+
+        leafletMap.invalidateSize();
+        modalEl.removeEventListener('shown.bs.modal', onShown);
+    };
+
+    modalEl.addEventListener('shown.bs.modal', onShown);
+    modal.show();
+}
+
+/**
+ * Load contacts geo cache for message map buttons
+ */
+async function loadContactsGeoCache() {
+    try {
+        const response = await fetch('/api/contacts/detailed');
+        const data = await response.json();
+
+        if (data.success && data.contacts) {
+            contactsGeoCache = {};
+            data.contacts.forEach(c => {
+                if (c.adv_lat && c.adv_lon && (c.adv_lat !== 0 || c.adv_lon !== 0)) {
+                    contactsGeoCache[c.name] = { lat: c.adv_lat, lon: c.adv_lon };
+                }
+            });
+            console.log(`Loaded geo cache for ${Object.keys(contactsGeoCache).length} contacts`);
+        }
+    } catch (err) {
+        console.error('Error loading contacts geo cache:', err);
+    }
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
@@ -84,6 +211,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Initial badge updates
     updatePendingContactsBadge();
     loadStatus();
+
+    // Load contacts geo cache for map buttons on messages
+    loadContactsGeoCache();
+
+    // Map button in menu
+    const mapBtn = document.getElementById('mapBtn');
+    if (mapBtn) {
+        mapBtn.addEventListener('click', () => {
+            // Close offcanvas first
+            const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('mainMenu'));
+            if (offcanvas) offcanvas.hide();
+            showAllContactsOnMap();
+        });
+    }
 
     // Update notification toggle UI
     updateNotificationToggleUI();
@@ -446,6 +587,11 @@ function createMessageElement(msg) {
                 <button class="btn btn-outline-secondary btn-sm btn-reply" onclick="replyTo('${escapeHtml(msg.sender)}')">
                     <i class="bi bi-reply"></i> Reply
                 </button>
+                ${contactsGeoCache[msg.sender] ? `
+                    <button class="btn btn-outline-primary btn-sm ms-1" onclick="showContactOnMap('${escapeHtml(msg.sender)}', ${contactsGeoCache[msg.sender].lat}, ${contactsGeoCache[msg.sender].lon})">
+                        <i class="bi bi-geo-alt"></i> Map
+                    </button>
+                ` : ''}
             </div>
         ` : ''}
     `;

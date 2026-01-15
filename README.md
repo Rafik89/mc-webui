@@ -16,6 +16,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - **Direct Messages (DM)** - Private messaging with delivery status tracking
 - **Smart notifications** - Unread message counters per channel with cross-device sync
 - **Contact management** - Manual approval mode, filtering, cleanup tools
+- **Contact map** - View contacts with GPS coordinates on OpenStreetMap (Leaflet)
 - **Message archives** - Automatic daily archiving with browse-by-date selector
 - **Interactive Console** - Direct meshcli command execution via WebSocket
 - **PWA support** - Browser notifications and installable app (experimental)
@@ -200,6 +201,7 @@ docker compose up -d --build
 - [x] PWA Notifications (Experimental) - Browser notifications and app badge counters
 - [x] Full Offline Support - Local Bootstrap libraries and Service Worker caching
 - [x] Interactive Console - Direct meshcli access via WebSocket with command history
+- [x] Contact Map - View contacts with GPS coordinates on OpenStreetMap (Leaflet)
 
 ### Next Steps
 

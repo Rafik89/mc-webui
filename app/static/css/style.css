@@ -698,3 +698,21 @@ main {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* =============================================================================
+   Leaflet Map Modal
+   ============================================================================= */
+
+#mapModal .modal-body {
+    min-height: 400px;
+}
+
+#leafletMap {
+    z-index: 1;
+}
+
+/* Fix Leaflet controls z-index in Bootstrap modal */
+.leaflet-top,
+.leaflet-bottom {
+    z-index: 1000;
+}

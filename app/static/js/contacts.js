@@ -831,7 +831,7 @@ function createContactCard(contact, index) {
         const mapBtn = document.createElement('button');
         mapBtn.className = 'btn btn-outline-primary btn-action';
         mapBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Map';
-        mapBtn.onclick = () => openGoogleMaps(contact.adv_lat, contact.adv_lon);
+        mapBtn.onclick = () => window.showContactOnMap(contact.name, contact.adv_lat, contact.adv_lon);
         actionsDiv.appendChild(mapBtn);
     }
 
@@ -1509,7 +1509,7 @@ function createExistingContactCard(contact, index) {
         const mapBtn = document.createElement('button');
         mapBtn.className = 'btn btn-sm btn-outline-primary';
         mapBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Map';
-        mapBtn.onclick = () => openGoogleMaps(contact.adv_lat, contact.adv_lon);
+        mapBtn.onclick = () => window.showContactOnMap(contact.name, contact.adv_lat, contact.adv_lon);
         actionsDiv.appendChild(mapBtn);
     }
 
@@ -1550,14 +1550,6 @@ function copyContactKey(publicKeyPrefix, buttonEl) {
         console.error('Failed to copy:', err);
         showToast('Failed to copy to clipboard', 'danger');
     });
-}
-
-function openGoogleMaps(lat, lon) {
-    // Create Google Maps URL with coordinates
-    const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-
-    // Open in new tab
-    window.open(mapsUrl, '_blank');
 }
 
 function showDeleteModal(contact) {
