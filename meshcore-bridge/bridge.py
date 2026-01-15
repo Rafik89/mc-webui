@@ -228,10 +228,19 @@ class MeshCLISession:
                     continue
 
                 # Detect device name from meshcli prompt: "DeviceName|*" or "DeviceName|*[E]"
+                # Handle status prefixes like "Fetching channels ....DeviceName|*"
                 if not self.detected_name and '|*' in line:
-                    prompt_match = re.match(r'^(.+?)\|\*', line)
-                    if prompt_match:
-                        self.detected_name = prompt_match.group(1).strip()
+                    before_prompt = line.split('|*')[0]
+                    # If line contains dots (status indicator), extract name after last dot sequence
+                    if '.' in before_prompt:
+                        # Split by one or more dots and take the last non-empty part
+                        parts = re.split(r'\.+', before_prompt)
+                        name_part = parts[-1].strip() if parts else ''
+                    else:
+                        name_part = before_prompt.strip()
+
+                    if name_part:
+                        self.detected_name = name_part
                         logger.info(f"Detected device name from prompt: {self.detected_name}")
                         self.name_detection_done.set()
 
