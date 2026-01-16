@@ -204,6 +204,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // This ensures channels are available for checkForUpdates()
     await loadChannels();
 
+    // Load contacts geo cache BEFORE messages (needed for Map buttons on bubbles)
+    await loadContactsGeoCache();
+
     // Now load other data (can run in parallel)
     loadArchiveList();
     loadMessages();
@@ -211,9 +214,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Initial badge updates
     updatePendingContactsBadge();
     loadStatus();
-
-    // Load contacts geo cache for map buttons on messages
-    loadContactsGeoCache();
 
     // Map button in menu
     const mapBtn = document.getElementById('mapBtn');

@@ -50,6 +50,59 @@ let contactToDelete = null;
 let sortBy = 'last_advert'; // 'name' or 'last_advert'
 let sortOrder = 'desc'; // 'asc' or 'desc'
 
+// Map state (Leaflet)
+let leafletMap = null;
+let markersGroup = null;
+
+// =============================================================================
+// Leaflet Map Functions
+// =============================================================================
+
+/**
+ * Initialize Leaflet map (called once on first modal open)
+ */
+function initLeafletMap() {
+    if (leafletMap) return;
+
+    leafletMap = L.map('leafletMap').setView([52.0, 19.0], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(leafletMap);
+
+    markersGroup = L.layerGroup().addTo(leafletMap);
+}
+
+/**
+ * Show single contact on map
+ */
+function showContactOnMap(name, lat, lon) {
+    const modalEl = document.getElementById('mapModal');
+    const modal = new bootstrap.Modal(modalEl);
+    document.getElementById('mapModalTitle').textContent = name;
+
+    const onShown = function() {
+        initLeafletMap();
+        markersGroup.clearLayers();
+
+        L.marker([lat, lon])
+            .addTo(markersGroup)
+            .bindPopup(`<b>${name}</b>`)
+            .openPopup();
+
+        leafletMap.setView([lat, lon], 13);
+        leafletMap.invalidateSize();
+
+        modalEl.removeEventListener('shown.bs.modal', onShown);
+    };
+
+    modalEl.addEventListener('shown.bs.modal', onShown);
+    modal.show();
+}
+
+// Make showContactOnMap available globally
+window.showContactOnMap = showContactOnMap;
+
 // =============================================================================
 // Initialization
 // =============================================================================
