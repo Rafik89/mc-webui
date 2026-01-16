@@ -20,6 +20,22 @@ let dmUnreadCounts = {};  // Track unread DM counts per conversation
 let leafletMap = null;
 let markersGroup = null;
 let contactsGeoCache = {};  // { 'contactName': { lat, lon }, ... }
+let allContactsWithGps = [];  // Cached contacts for map filtering
+
+// Contact type colors for map markers
+const CONTACT_TYPE_COLORS = {
+    1: '#2196F3',  // CLI - blue
+    2: '#4CAF50',  // REP - green
+    3: '#9C27B0',  // ROOM - purple
+    4: '#FF9800'   // SENS - orange
+};
+
+const CONTACT_TYPE_NAMES = {
+    1: 'CLI',
+    2: 'REP',
+    3: 'ROOM',
+    4: 'SENS'
+};
 
 /**
  * Global navigation function - closes offcanvas and cleans up before navigation
@@ -77,6 +93,10 @@ function showContactOnMap(name, lat, lon) {
     const modal = new bootstrap.Modal(modalEl);
     document.getElementById('mapModalTitle').textContent = name;
 
+    // Hide type filter panel for single contact view
+    const filterPanel = document.getElementById('mapTypeFilter');
+    if (filterPanel) filterPanel.classList.add('d-none');
+
     const onShown = function() {
         initLeafletMap();
         markersGroup.clearLayers();
@@ -100,12 +120,70 @@ function showContactOnMap(name, lat, lon) {
 window.showContactOnMap = showContactOnMap;
 
 /**
+ * Get selected contact types from map filter checkboxes
+ */
+function getSelectedMapTypes() {
+    const types = [];
+    if (document.getElementById('mapFilterCLI')?.checked) types.push(1);
+    if (document.getElementById('mapFilterREP')?.checked) types.push(2);
+    if (document.getElementById('mapFilterROOM')?.checked) types.push(3);
+    if (document.getElementById('mapFilterSENS')?.checked) types.push(4);
+    return types;
+}
+
+/**
+ * Update map markers based on current filter selection
+ */
+function updateMapMarkers() {
+    if (!leafletMap || !markersGroup) return;
+
+    markersGroup.clearLayers();
+    const selectedTypes = getSelectedMapTypes();
+
+    const filteredContacts = allContactsWithGps.filter(c => selectedTypes.includes(c.type));
+
+    if (filteredContacts.length === 0) {
+        leafletMap.setView([52.0, 19.0], 6);
+        return;
+    }
+
+    const bounds = [];
+    filteredContacts.forEach(c => {
+        const color = CONTACT_TYPE_COLORS[c.type] || '#2196F3';
+        const typeName = CONTACT_TYPE_NAMES[c.type] || 'Unknown';
+
+        L.circleMarker([c.adv_lat, c.adv_lon], {
+            radius: 10,
+            fillColor: color,
+            color: '#fff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        })
+            .addTo(markersGroup)
+            .bindPopup(`<b>${c.name}</b><br><span class="text-muted">${typeName}</span>`);
+
+        bounds.push([c.adv_lat, c.adv_lon]);
+    });
+
+    if (bounds.length === 1) {
+        leafletMap.setView(bounds[0], 13);
+    } else {
+        leafletMap.fitBounds(bounds, { padding: [20, 20] });
+    }
+}
+
+/**
  * Show all contacts with GPS on map
  */
 async function showAllContactsOnMap() {
     const modalEl = document.getElementById('mapModal');
     const modal = new bootstrap.Modal(modalEl);
     document.getElementById('mapModalTitle').textContent = 'All Contacts';
+
+    // Show type filter panel
+    const filterPanel = document.getElementById('mapTypeFilter');
+    if (filterPanel) filterPanel.classList.remove('d-none');
 
     const onShown = async function() {
         initLeafletMap();
@@ -116,27 +194,11 @@ async function showAllContactsOnMap() {
             const data = await response.json();
 
             if (data.success && data.contacts) {
-                const contactsWithGps = data.contacts.filter(c =>
+                allContactsWithGps = data.contacts.filter(c =>
                     c.adv_lat && c.adv_lon && (c.adv_lat !== 0 || c.adv_lon !== 0)
                 );
 
-                if (contactsWithGps.length === 0) {
-                    leafletMap.setView([52.0, 19.0], 6);
-                } else {
-                    const bounds = [];
-                    contactsWithGps.forEach(c => {
-                        L.marker([c.adv_lat, c.adv_lon])
-                            .addTo(markersGroup)
-                            .bindPopup(`<b>${c.name}</b>`);
-                        bounds.push([c.adv_lat, c.adv_lon]);
-                    });
-
-                    if (bounds.length === 1) {
-                        leafletMap.setView(bounds[0], 13);
-                    } else {
-                        leafletMap.fitBounds(bounds, { padding: [20, 20] });
-                    }
-                }
+                updateMapMarkers();
             }
         } catch (err) {
             console.error('Error loading contacts for map:', err);
@@ -145,6 +207,14 @@ async function showAllContactsOnMap() {
         leafletMap.invalidateSize();
         modalEl.removeEventListener('shown.bs.modal', onShown);
     };
+
+    // Setup filter checkbox listeners
+    ['mapFilterCLI', 'mapFilterREP', 'mapFilterROOM', 'mapFilterSENS'].forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.onchange = updateMapMarkers;
+        }
+    });
 
     modalEl.addEventListener('shown.bs.modal', onShown);
     modal.show();

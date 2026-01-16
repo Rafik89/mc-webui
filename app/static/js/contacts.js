@@ -81,6 +81,10 @@ function showContactOnMap(name, lat, lon) {
     const modal = new bootstrap.Modal(modalEl);
     document.getElementById('mapModalTitle').textContent = name;
 
+    // Hide type filter panel for single contact view
+    const filterPanel = document.getElementById('mapTypeFilter');
+    if (filterPanel) filterPanel.classList.add('d-none');
+
     const onShown = function() {
         initLeafletMap();
         markersGroup.clearLayers();
