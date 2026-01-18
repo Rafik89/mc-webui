@@ -141,8 +141,11 @@ To update mc-webui to the latest version:
 ```bash
 cd ~/mc-webui
 git pull
+python3 -m app.version freeze
 docker compose up -d --build
 ```
+
+The `python3 -m app.version freeze` command captures the current Git version (date + commit hash) for display in the app menu.
 
 **Testing experimental features:**
 
@@ -151,6 +154,7 @@ The `dev` branch contains new features that are still being tested:
 ```bash
 git checkout dev
 git pull
+python3 -m app.version freeze
 docker compose up -d --build
 ```
 
@@ -159,6 +163,7 @@ To return to the stable version:
 ```bash
 git checkout main
 git pull
+python3 -m app.version freeze
 docker compose up -d --build
 ```
 
