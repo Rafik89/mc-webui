@@ -86,6 +86,7 @@ For detailed feature documentation, see the [User Guide](docs/user-guide.md).
 
 4. **Build and run**
     ```bash
+    python3 -m app.version freeze
     docker compose up -d --build
     ```
 
