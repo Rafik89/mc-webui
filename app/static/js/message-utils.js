@@ -88,19 +88,7 @@ function createImageThumbnail(url) {
     // Escape URL for use in HTML attributes
     const escapedUrl = escapeHtmlAttribute(url);
 
-    return `
-        <div class="message-image-container">
-            <img src="${escapedUrl}"
-                 alt="Image"
-                 class="message-image-thumbnail"
-                 data-image-url="${escapedUrl}"
-                 loading="lazy"
-                 onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'100\\' height=\\'100\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' fill=\\'%23999\\'%3EError%3C/text%3E%3C/svg%3E';">
-            <div class="message-image-url">
-                <a href="${escapedUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${url}</a>
-            </div>
-        </div>
-    `;
+    return `<div class="message-image-container"><img src="${escapedUrl}" alt="Image" class="message-image-thumbnail" data-image-url="${escapedUrl}" loading="lazy" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'100\\' height=\\'100\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' fill=\\'%23999\\'%3EError%3C/text%3E%3C/svg%3E';"><div class="message-image-url"><a href="${escapedUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${url}</a></div></div>`;
 }
 
 /**
