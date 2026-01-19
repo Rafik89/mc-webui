@@ -53,7 +53,8 @@ function processQuotes(text) {
     const quotePattern = /»([^«]+)«/g;
 
     return text.replace(quotePattern, (_match, quoted) => {
-        return `<span class="quote-text">»${quoted}«</span>`;
+        // Display without guillemets (styling is enough) + line break after
+        return `<span class="quote-text">${quoted}</span><br>`;
     });
 }
 
