@@ -30,8 +30,8 @@ main {
 /* Messages Container */
 .messages-container {
     background-color: #ffffff;
-    padding-left: 0.5rem !important;
-    padding-right: 0.5rem !important;
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
 }
 
 #messagesList {
@@ -81,7 +81,7 @@ main {
 .message-avatar.emoji {
     font-size: 1.25rem;
     background-color: transparent !important;
-    border: 2.5px solid;
+    border: 1.5px solid;
     line-height: 1;
     padding-bottom: 1px;
 }
