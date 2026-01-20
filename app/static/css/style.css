@@ -80,6 +80,8 @@ main {
 
 .message-avatar.emoji {
     font-size: 1.25rem;
+    background-color: transparent !important;
+    border: 2.5px solid;
 }
 
 /* Message container - holds sender row + bubble + actions */

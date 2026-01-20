@@ -687,8 +687,12 @@ function createMessageElement(msg) {
         // Other messages: left-aligned with avatar
         const avatar = generateAvatar(msg.sender);
 
+        const avatarStyle = avatar.isEmoji
+            ? `border-color: ${avatar.color};`
+            : `background-color: ${avatar.color};`;
+
         wrapper.innerHTML = `
-            <div class="message-avatar${avatar.isEmoji ? ' emoji' : ''}" style="background-color: ${avatar.color};">
+            <div class="message-avatar${avatar.isEmoji ? ' emoji' : ''}" style="${avatarStyle}">
                 ${avatar.content}
             </div>
             <div class="message-container">
