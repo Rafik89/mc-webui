@@ -75,6 +75,10 @@ if [ ! -f "$MCWEBUI_DIR/scripts/update.sh" ]; then
     error "update.sh not found in $MCWEBUI_DIR/scripts/"
 fi
 
+# Configure git safe.directory for root (required since service runs as root)
+info "Configuring git safe.directory..."
+git config --global --add safe.directory "$MCWEBUI_DIR" 2>/dev/null || true
+
 # Create service file with correct paths
 info "Creating systemd service file..."
 cat > "$SERVICE_FILE" << EOF
@@ -88,7 +92,7 @@ Type=simple
 User=root
 Environment=MCWEBUI_DIR=${MCWEBUI_DIR}
 Environment=UPDATER_TOKEN=
-ExecStart=/usr/bin/python3 ${SCRIPT_DIR}/updater.py
+ExecStart=/usr/bin/python3 -u ${SCRIPT_DIR}/updater.py
 Restart=always
 RestartSec=5
 
