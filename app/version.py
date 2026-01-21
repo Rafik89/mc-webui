@@ -20,7 +20,7 @@ def subprocess_run(args):
         capture_output=True,
         text=True,
         check=True,
-        env={"PATH": os.environ.get("PATH", ""), "LC_ALL": "C"}
+        env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), "LC_ALL": "C"}
     )
     return proc.stdout.strip()
 
