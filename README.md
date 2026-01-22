@@ -253,7 +253,7 @@ sudo ~/mc-webui/scripts/updater/install.sh --uninstall
     <td align="center"><a href="gallery/update_available.png"><img src="gallery/update_available.png" width="150"><br>Update Available</a></td>
     <td align="center"><a href="gallery/remote_update.png"><img src="gallery/remote_update.png" width="150"><br>Remote Update</a></td>
     <td align="center"><a href="gallery/updated_successfully.png"><img src="gallery/updated_successfully.png" width="150"><br>Updated Successfully</a></td>
-    <td></td>
+    <td align="center"><a href="gallery/meshcli_console.png"><img src="gallery/meshcli_console.png" width="150"><br>Meshcli Console</a></td>
   </tr>
   <tr>
     <td align="center"><a href="gallery/contact_management.png"><img src="gallery/contact_management.png" width="150"><br>Contact Management</a></td>
@@ -266,12 +266,6 @@ sudo ~/mc-webui/scripts/updater/install.sh --uninstall
     <td align="center"><a href="gallery/map_individual.png"><img src="gallery/map_individual.png" width="150"><br>Map (Individual)</a></td>
     <td align="center"><a href="gallery/image_preview_1.png"><img src="gallery/image_preview_1.png" width="150"><br>Image Preview (1)</a></td>
     <td align="center"><a href="gallery/image_preview_2.png"><img src="gallery/image_preview_2.png" width="150"><br>Image Preview (2)</a></td>
-  </tr>
-  <tr>
-    <td align="center"><a href="gallery/meshcli_console.png"><img src="gallery/meshcli_console.png" width="150"><br>Meshcli Console</a></td>
-    <td></td>
-    <td></td>
-    <td></td>
   </tr>
 </table>
 
