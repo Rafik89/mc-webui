@@ -2,6 +2,7 @@
 # mc-webui
 
 A lightweight web interface for meshcore-cli, providing browser-based access to MeshCore mesh network.
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MarekWo/mc-webui)
 
 ## Overview
