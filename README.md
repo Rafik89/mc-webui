@@ -250,6 +250,12 @@ sudo ~/mc-webui/scripts/updater/install.sh --uninstall
     <td align="center"><a href="gallery/update_check.png"><img src="gallery/update_check.png" width="150"><br>Update Check</a></td>
   </tr>
   <tr>
+    <td align="center"><a href="gallery/update_available.png"><img src="gallery/update_available.png" width="150"><br>Update Available</a></td>
+    <td align="center"><a href="gallery/remote_update.png"><img src="gallery/remote_update.png" width="150"><br>Remote Update</a></td>
+    <td align="center"><a href="gallery/updated_successfully.png"><img src="gallery/updated_successfully.png" width="150"><br>Updated Successfully</a></td>
+    <td></td>
+  </tr>
+  <tr>
     <td align="center"><a href="gallery/contact_management.png"><img src="gallery/contact_management.png" width="150"><br>Contact Management</a></td>
     <td align="center"><a href="gallery/existing_contacts.png"><img src="gallery/existing_contacts.png" width="150"><br>Existing Contacts</a></td>
     <td align="center"><a href="gallery/approve_contact.png"><img src="gallery/approve_contact.png" width="150"><br>Approve Contact</a></td>
