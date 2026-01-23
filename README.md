@@ -17,7 +17,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - **Channel management** - Create, join, share (QR code), and switch between encrypted channels
 - **Direct Messages (DM)** - Private messaging with delivery status tracking
 - **Smart notifications** - Unread message counters per channel with cross-device sync
-- **Contact management** - Manual approval mode, filtering, cleanup tools
+- **Contact management** - Manual approval mode, filtering, protection, cleanup tools
 - **Contact map** - View contacts with GPS coordinates on OpenStreetMap (Leaflet)
 - **Message archives** - Automatic daily archiving with browse-by-date selector
 - **Interactive Console** - Direct meshcli command execution via WebSocket
