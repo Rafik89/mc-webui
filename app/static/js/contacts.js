@@ -51,6 +51,10 @@ let protectedContacts = []; // List of protected public_keys
 let sortBy = 'last_advert'; // 'name' or 'last_advert'
 let sortOrder = 'desc'; // 'asc' or 'desc'
 
+// Auto-cleanup state
+let autoCleanupSettings = null;
+let cleanupSaveDebounceTimer = null;
+
 // Map state (Leaflet)
 let leafletMap = null;
 let markersGroup = null;
@@ -168,6 +172,9 @@ function initManagePage() {
     // Load contact counts for badges
     loadContactCounts();
 
+    // Load cleanup settings (populates form and auto-cleanup status)
+    loadCleanupSettings();
+
     // Attach event listeners for manage page
     attachManageEventListeners();
 }
@@ -190,6 +197,33 @@ function attachManageEventListeners() {
     if (confirmCleanupBtn) {
         confirmCleanupBtn.addEventListener('click', handleCleanupConfirm);
     }
+
+    // Auto-cleanup toggle
+    const autoCleanupSwitch = document.getElementById('autoCleanupSwitch');
+    if (autoCleanupSwitch) {
+        autoCleanupSwitch.addEventListener('change', handleAutoCleanupToggle);
+    }
+
+    // Debounced auto-save for cleanup filter inputs
+    const cleanupNameFilter = document.getElementById('cleanupNameFilter');
+    if (cleanupNameFilter) {
+        cleanupNameFilter.addEventListener('input', debouncedSaveCleanupCriteria);
+    }
+
+    const cleanupDays = document.getElementById('cleanupDays');
+    if (cleanupDays) {
+        cleanupDays.addEventListener('input', debouncedSaveCleanupCriteria);
+    }
+
+    // Type filter checkboxes
+    document.querySelectorAll('.cleanup-type-filter').forEach(cb => {
+        cb.addEventListener('change', debouncedSaveCleanupCriteria);
+    });
+
+    // Date field radio buttons
+    document.querySelectorAll('input[name="cleanupDateField"]').forEach(radio => {
+        radio.addEventListener('change', debouncedSaveCleanupCriteria);
+    });
 }
 
 async function loadContactCounts() {
@@ -235,6 +269,221 @@ async function loadContactCounts() {
         }
     } catch (error) {
         console.error('Error loading contact counts:', error);
+    }
+}
+
+// =============================================================================
+// Auto-Cleanup Settings Management
+// =============================================================================
+
+/**
+ * Load cleanup settings from server and apply to UI.
+ */
+async function loadCleanupSettings() {
+    const statusText = document.getElementById('autoCleanupStatusText');
+    if (statusText) statusText.textContent = 'Loading...';
+
+    try {
+        const response = await fetch('/api/contacts/cleanup-settings');
+        const data = await response.json();
+
+        if (data.success) {
+            autoCleanupSettings = data.settings;
+            applyCleanupSettingsToUI(autoCleanupSettings);
+            console.log('Loaded cleanup settings:', autoCleanupSettings);
+        } else {
+            console.error('Failed to load cleanup settings:', data.error);
+            if (statusText) statusText.textContent = 'Error loading settings';
+        }
+    } catch (error) {
+        console.error('Error loading cleanup settings:', error);
+        if (statusText) statusText.textContent = 'Network error';
+    }
+}
+
+/**
+ * Apply cleanup settings to form inputs.
+ * @param {Object} settings - Cleanup settings object
+ */
+function applyCleanupSettingsToUI(settings) {
+    // Name filter
+    const nameInput = document.getElementById('cleanupNameFilter');
+    if (nameInput) {
+        nameInput.value = settings.name_filter || '';
+    }
+
+    // Days
+    const daysInput = document.getElementById('cleanupDays');
+    if (daysInput) {
+        daysInput.value = settings.days || 0;
+    }
+
+    // Date field
+    const dateFieldValue = settings.date_field || 'last_advert';
+    const dateRadio = document.querySelector(`input[name="cleanupDateField"][value="${dateFieldValue}"]`);
+    if (dateRadio) {
+        dateRadio.checked = true;
+    }
+
+    // Contact types
+    const types = settings.types || [1, 2, 3, 4];
+    document.querySelectorAll('.cleanup-type-filter').forEach(cb => {
+        cb.checked = types.includes(parseInt(cb.value));
+    });
+
+    // Auto-cleanup switch and status
+    const autoCleanupSwitch = document.getElementById('autoCleanupSwitch');
+    const statusText = document.getElementById('autoCleanupStatusText');
+
+    if (autoCleanupSwitch) {
+        autoCleanupSwitch.checked = settings.enabled || false;
+    }
+
+    if (statusText) {
+        if (settings.enabled) {
+            statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+            statusText.classList.remove('text-muted');
+            statusText.classList.add('text-success');
+        } else {
+            statusText.textContent = 'Disabled';
+            statusText.classList.remove('text-success');
+            statusText.classList.add('text-muted');
+        }
+    }
+}
+
+/**
+ * Handle auto-cleanup toggle change.
+ * Validates criteria before enabling.
+ */
+async function handleAutoCleanupToggle(event) {
+    const enabled = event.target.checked;
+    const statusText = document.getElementById('autoCleanupStatusText');
+
+    // Validate before enabling
+    if (enabled) {
+        const criteria = collectCleanupCriteria();
+
+        // Check if days > 0
+        if (criteria.days <= 0) {
+            showToast('Set "Days of Inactivity" > 0 before enabling auto-cleanup', 'warning');
+            event.target.checked = false;
+            return;
+        }
+
+        // Check if at least one type is selected
+        if (criteria.types.length === 0) {
+            showToast('Select at least one contact type before enabling auto-cleanup', 'warning');
+            event.target.checked = false;
+            return;
+        }
+    }
+
+    // Update status text while saving
+    if (statusText) {
+        statusText.textContent = 'Saving...';
+        statusText.classList.remove('text-success', 'text-muted');
+    }
+
+    // Save settings with new enabled state
+    const success = await saveCleanupSettings(enabled);
+
+    if (!success) {
+        // Revert switch on failure
+        event.target.checked = !enabled;
+    }
+}
+
+/**
+ * Debounced save for cleanup criteria changes.
+ * Only saves criteria, does not change enabled state.
+ */
+function debouncedSaveCleanupCriteria() {
+    // Clear existing timer
+    if (cleanupSaveDebounceTimer) {
+        clearTimeout(cleanupSaveDebounceTimer);
+    }
+
+    // Set new timer (500ms debounce)
+    cleanupSaveDebounceTimer = setTimeout(() => {
+        // Only save if auto-cleanup settings have been loaded
+        if (autoCleanupSettings !== null) {
+            // Preserve current enabled state
+            saveCleanupSettings(autoCleanupSettings.enabled);
+        }
+    }, 500);
+}
+
+/**
+ * Save cleanup settings to server.
+ * @param {boolean} enabled - Whether auto-cleanup should be enabled
+ * @returns {Promise<boolean>} True if save was successful
+ */
+async function saveCleanupSettings(enabled) {
+    const criteria = collectCleanupCriteria();
+    const statusText = document.getElementById('autoCleanupStatusText');
+
+    const settings = {
+        enabled: enabled,
+        types: criteria.types,
+        date_field: criteria.date_field,
+        days: criteria.days,
+        name_filter: criteria.name_filter
+    };
+
+    try {
+        const response = await fetch('/api/contacts/cleanup-settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            autoCleanupSettings = data.settings;
+
+            // Update status text
+            if (statusText) {
+                if (data.settings.enabled) {
+                    statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+                    statusText.classList.remove('text-muted');
+                    statusText.classList.add('text-success');
+                } else {
+                    statusText.textContent = 'Disabled';
+                    statusText.classList.remove('text-success');
+                    statusText.classList.add('text-muted');
+                }
+            }
+
+            console.log('Cleanup settings saved:', data.settings);
+            return true;
+        } else {
+            console.error('Failed to save cleanup settings:', data.error);
+            showToast('Failed to save settings: ' + data.error, 'danger');
+
+            // Restore previous status
+            if (statusText && autoCleanupSettings) {
+                if (autoCleanupSettings.enabled) {
+                    statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+                } else {
+                    statusText.textContent = 'Disabled';
+                }
+            }
+
+            return false;
+        }
+    } catch (error) {
+        console.error('Error saving cleanup settings:', error);
+        showToast('Network error saving settings', 'danger');
+
+        if (statusText) {
+            statusText.textContent = 'Save failed';
+        }
+
+        return false;
     }
 }
 

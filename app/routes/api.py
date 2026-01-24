@@ -177,6 +177,84 @@ def save_protected_contacts(protected_list: list) -> bool:
         return False
 
 
+# =============================================================================
+# Cleanup Settings Management
+# =============================================================================
+
+def get_cleanup_settings() -> dict:
+    """
+    Get auto-cleanup settings from .webui_settings.json.
+
+    Returns:
+        Dict with cleanup settings:
+        {
+            'enabled': bool,
+            'types': list[int],
+            'date_field': str,
+            'days': int,
+            'name_filter': str
+        }
+    """
+    from pathlib import Path
+    defaults = {
+        'enabled': False,
+        'types': [1, 2, 3, 4],
+        'date_field': 'last_advert',
+        'days': 30,
+        'name_filter': ''
+    }
+
+    settings_path = Path(config.MC_CONFIG_DIR) / ".webui_settings.json"
+
+    try:
+        if not settings_path.exists():
+            return defaults
+
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+            cleanup = settings.get('cleanup_settings', {})
+            # Merge with defaults to ensure all fields exist
+            return {**defaults, **cleanup}
+    except Exception as e:
+        logger.error(f"Failed to read cleanup settings: {e}")
+        return defaults
+
+
+def save_cleanup_settings(cleanup_settings: dict) -> bool:
+    """
+    Save auto-cleanup settings to .webui_settings.json (atomic write).
+
+    Args:
+        cleanup_settings: Dict with cleanup configuration
+
+    Returns:
+        True if successful, False otherwise
+    """
+    from pathlib import Path
+    settings_path = Path(config.MC_CONFIG_DIR) / ".webui_settings.json"
+
+    try:
+        # Read existing settings
+        settings = {}
+        if settings_path.exists():
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+        # Update cleanup settings
+        settings['cleanup_settings'] = cleanup_settings
+
+        # Write back atomically
+        temp_file = settings_path.with_suffix('.tmp')
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        temp_file.replace(settings_path)
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save cleanup settings: {e}")
+        return False
+
+
 @api_bp.route('/messages', methods=['GET'])
 def get_messages():
     """
@@ -1889,6 +1967,128 @@ def toggle_contact_protection(public_key):
 
     except Exception as e:
         logger.error(f"Error toggling contact protection: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/contacts/cleanup-settings', methods=['GET'])
+def get_cleanup_settings_api():
+    """
+    Get auto-cleanup settings.
+
+    Returns:
+        JSON with cleanup settings:
+        {
+            "success": true,
+            "settings": {
+                "enabled": false,
+                "types": [1, 2, 3, 4],
+                "date_field": "last_advert",
+                "days": 30,
+                "name_filter": ""
+            }
+        }
+    """
+    try:
+        settings = get_cleanup_settings()
+        return jsonify({
+            'success': True,
+            'settings': settings
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting cleanup settings: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'settings': {
+                'enabled': False,
+                'types': [1, 2, 3, 4],
+                'date_field': 'last_advert',
+                'days': 30,
+                'name_filter': ''
+            }
+        }), 500
+
+
+@api_bp.route('/contacts/cleanup-settings', methods=['POST'])
+def update_cleanup_settings_api():
+    """
+    Update auto-cleanup settings.
+
+    JSON body:
+        {
+            "enabled": true,
+            "types": [1, 2],
+            "date_field": "last_advert",
+            "days": 30,
+            "name_filter": ""
+        }
+
+    Returns:
+        JSON with update result:
+        {
+            "success": true,
+            "message": "Cleanup settings updated",
+            "settings": {...}
+        }
+    """
+    try:
+        data = request.get_json() or {}
+
+        # Validate fields
+        if 'types' in data:
+            if not isinstance(data['types'], list) or not all(t in [1, 2, 3, 4] for t in data['types']):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid types (must be list of 1, 2, 3, 4)'
+                }), 400
+
+        if 'date_field' in data:
+            if data['date_field'] not in ['last_advert', 'lastmod']:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid date_field (must be "last_advert" or "lastmod")'
+                }), 400
+
+        if 'days' in data:
+            if not isinstance(data['days'], int) or data['days'] < 0:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid days (must be non-negative integer)'
+                }), 400
+
+        if 'enabled' in data:
+            if not isinstance(data['enabled'], bool):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid enabled (must be boolean)'
+                }), 400
+
+        # Get current settings and merge with new values
+        current = get_cleanup_settings()
+        updated = {**current, **data}
+
+        # Save settings
+        if not save_cleanup_settings(updated):
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save cleanup settings'
+            }), 500
+
+        # Update scheduler based on enabled state
+        from app.archiver.manager import schedule_cleanup
+        schedule_cleanup(enabled=updated.get('enabled', False))
+
+        return jsonify({
+            'success': True,
+            'message': 'Cleanup settings updated',
+            'settings': updated
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error updating cleanup settings: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

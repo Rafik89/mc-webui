@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # Global scheduler instance
 _scheduler: Optional[BackgroundScheduler] = None
 
+# Job IDs
+CLEANUP_JOB_ID = 'daily_cleanup'
+
 
 def get_archive_path(archive_date: str) -> Path:
     """
@@ -225,6 +228,180 @@ def _archive_job():
         logger.error(f"Archive job failed: {result.get('error', 'Unknown error')}")
 
 
+def _cleanup_job():
+    """
+    Background job that runs daily at 01:00 UTC to clean up contacts.
+    Uses saved cleanup settings to filter and delete contacts.
+    """
+    logger.info("Running daily cleanup job...")
+
+    try:
+        # Import here to avoid circular imports
+        from app.routes.api import (
+            get_cleanup_settings,
+            get_protected_contacts,
+            _filter_contacts_by_criteria
+        )
+
+        # Get cleanup settings
+        settings = get_cleanup_settings()
+
+        if not settings.get('enabled'):
+            logger.info("Auto-cleanup is disabled, skipping")
+            return
+
+        # Get contacts from device
+        import requests
+        response = requests.get(
+            f"{config.BRIDGE_URL}/cli",
+            json={'args': ['contacts']},
+            timeout=30
+        )
+
+        if response.status_code != 200:
+            logger.error(f"Failed to get contacts: HTTP {response.status_code}")
+            return
+
+        data = response.json()
+        if not data.get('success'):
+            logger.error(f"Failed to get contacts: {data.get('error', 'Unknown error')}")
+            return
+
+        # Parse contacts from output
+        contacts = []
+        output = data.get('output', '')
+        import json as json_module
+        for line in output.strip().split('\n'):
+            if line.strip():
+                try:
+                    contact = json_module.loads(line)
+                    contacts.append(contact)
+                except json_module.JSONDecodeError:
+                    continue
+
+        if not contacts:
+            logger.info("No contacts found, nothing to clean up")
+            return
+
+        # Filter contacts using saved criteria
+        criteria = {
+            'types': settings.get('types', [1, 2, 3, 4]),
+            'date_field': settings.get('date_field', 'last_advert'),
+            'days': settings.get('days', 30),
+            'name_filter': settings.get('name_filter', '')
+        }
+
+        # Get protected contacts
+        protected = get_protected_contacts()
+
+        # Filter contacts (this function excludes protected contacts)
+        matching_contacts = _filter_contacts_by_criteria(contacts, criteria, protected)
+
+        if not matching_contacts:
+            logger.info("No contacts match cleanup criteria")
+            return
+
+        logger.info(f"Found {len(matching_contacts)} contacts to clean up")
+
+        # Delete matching contacts
+        deleted_count = 0
+        for contact in matching_contacts:
+            name = contact.get('name', '')
+            if not name:
+                continue
+
+            try:
+                delete_response = requests.post(
+                    f"{config.BRIDGE_URL}/cli",
+                    json={'args': ['contact', '-d', name]},
+                    timeout=30
+                )
+
+                if delete_response.status_code == 200:
+                    delete_data = delete_response.json()
+                    if delete_data.get('success'):
+                        deleted_count += 1
+                        logger.debug(f"Deleted contact: {name}")
+                    else:
+                        logger.warning(f"Failed to delete contact {name}: {delete_data.get('error')}")
+                else:
+                    logger.warning(f"Failed to delete contact {name}: HTTP {delete_response.status_code}")
+            except Exception as e:
+                logger.warning(f"Error deleting contact {name}: {e}")
+
+        logger.info(f"Cleanup job completed: deleted {deleted_count}/{len(matching_contacts)} contacts")
+
+    except Exception as e:
+        logger.error(f"Cleanup job failed: {e}", exc_info=True)
+
+
+def schedule_cleanup(enabled: bool) -> bool:
+    """
+    Add or remove the cleanup job from the scheduler.
+
+    Args:
+        enabled: True to enable cleanup job, False to disable
+
+    Returns:
+        True if successful, False otherwise
+    """
+    global _scheduler
+
+    if _scheduler is None:
+        logger.warning("Scheduler not initialized, cannot schedule cleanup")
+        return False
+
+    try:
+        if enabled:
+            # Add cleanup job at 01:00 UTC
+            trigger = CronTrigger(hour=1, minute=0)
+
+            _scheduler.add_job(
+                func=_cleanup_job,
+                trigger=trigger,
+                id=CLEANUP_JOB_ID,
+                name='Daily Contact Cleanup',
+                replace_existing=True
+            )
+
+            logger.info("Cleanup job scheduled - will run daily at 01:00 UTC")
+        else:
+            # Remove cleanup job if it exists
+            try:
+                _scheduler.remove_job(CLEANUP_JOB_ID)
+                logger.info("Cleanup job removed from scheduler")
+            except Exception:
+                # Job might not exist, that's OK
+                pass
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error scheduling cleanup: {e}", exc_info=True)
+        return False
+
+
+def init_cleanup_schedule():
+    """
+    Initialize cleanup schedule from saved settings.
+    Called at startup after scheduler is started.
+    """
+    try:
+        # Import here to avoid circular imports
+        from app.routes.api import get_cleanup_settings
+
+        settings = get_cleanup_settings()
+
+        if settings.get('enabled'):
+            schedule_cleanup(enabled=True)
+            logger.info("Auto-cleanup enabled from saved settings")
+        else:
+            logger.info("Auto-cleanup is disabled in saved settings")
+
+    except Exception as e:
+        logger.error(f"Error initializing cleanup schedule: {e}", exc_info=True)
+
+
 def schedule_daily_archiving():
     """
     Initialize and start the background scheduler for daily archiving.
@@ -260,6 +437,9 @@ def schedule_daily_archiving():
         _scheduler.start()
 
         logger.info("Archive scheduler started - will run daily at 00:00 UTC")
+
+        # Initialize cleanup schedule from saved settings
+        init_cleanup_schedule()
 
     except Exception as e:
         logger.error(f"Failed to start archive scheduler: {e}", exc_info=True)

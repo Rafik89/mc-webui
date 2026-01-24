@@ -124,6 +124,21 @@
                 <input type="number" class="form-control" id="cleanupDays" value="0" min="0">
                 <small class="form-text text-muted">Contacts inactive for more than this many days will be selected</small>
             </div>
+
+            <!-- Auto-Cleanup Toggle -->
+            <div class="mb-3 mt-4 pt-3 border-top">
+                <div class="form-check form-switch d-flex align-items-center gap-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="autoCleanupSwitch" style="cursor: pointer; min-width: 3rem; min-height: 1.5rem;">
+                    <label class="form-check-label" for="autoCleanupSwitch" style="cursor: pointer; font-weight: 500;">
+                        <span id="autoCleanupLabel">Enable Auto-Cleanup</span>
+                    </label>
+                    <i class="bi bi-info-circle info-icon"
+                       data-bs-toggle="tooltip"
+                       data-bs-placement="top"
+                       title="When enabled, contacts matching the above criteria will be automatically deleted daily at 01:00 UTC"></i>
+                </div>
+                <small class="text-muted">Status: <span id="autoCleanupStatusText">Loading...</span></small>
+            </div>
         </div>
 
         <button class="btn btn-warning" id="cleanupPreviewBtn">
