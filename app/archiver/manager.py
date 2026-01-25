@@ -261,7 +261,7 @@ def _archive_job():
 
 def _cleanup_job():
     """
-    Background job that runs daily at 01:00 UTC to clean up contacts.
+    Background job that runs daily to clean up contacts.
     Uses saved cleanup settings to filter and delete contacts.
     """
     logger.info("Running daily cleanup job...")
@@ -273,6 +273,7 @@ def _cleanup_job():
             get_protected_contacts,
             _filter_contacts_by_criteria
         )
+        from app.meshcore import cli
 
         # Get cleanup settings
         settings = get_cleanup_settings()
@@ -281,34 +282,31 @@ def _cleanup_job():
             logger.info("Auto-cleanup is disabled, skipping")
             return
 
-        # Get contacts from device
-        import requests
-        response = requests.post(
-            config.MC_BRIDGE_URL,
-            json={'args': ['contacts']},
-            timeout=30
-        )
+        # Get contacts using the same method as preview-cleanup
+        success, contacts_detailed, error = cli.get_contacts_with_last_seen()
 
-        if response.status_code != 200:
-            logger.error(f"Failed to get contacts: HTTP {response.status_code}")
+        if not success:
+            logger.error(f"Failed to get contacts: {error}")
             return
 
-        data = response.json()
-        if not data.get('success'):
-            logger.error(f"Failed to get contacts: {data.get('error', 'Unknown error')}")
-            return
-
-        # Parse contacts from output
+        # Convert to list format (same as preview-cleanup endpoint)
+        type_labels = {1: 'CLI', 2: 'REP', 3: 'ROOM', 4: 'SENS'}
         contacts = []
-        output = data.get('output', '')
-        import json as json_module
-        for line in output.strip().split('\n'):
-            if line.strip():
-                try:
-                    contact = json_module.loads(line)
-                    contacts.append(contact)
-                except json_module.JSONDecodeError:
-                    continue
+        for public_key, details in contacts_detailed.items():
+            contacts.append({
+                'public_key': public_key,
+                'name': details.get('adv_name', ''),
+                'type': details.get('type'),
+                'type_label': type_labels.get(details.get('type'), 'UNKNOWN'),
+                'last_advert': details.get('last_advert'),
+                'lastmod': details.get('lastmod'),
+                'out_path_len': details.get('out_path_len', -1),
+                'out_path': details.get('out_path', ''),
+                'adv_lat': details.get('adv_lat'),
+                'adv_lon': details.get('adv_lon')
+            })
+
+        logger.info(f"Loaded {len(contacts)} contacts from device")
 
         if not contacts:
             logger.info("No contacts found, nothing to clean up")
@@ -334,31 +332,23 @@ def _cleanup_job():
 
         logger.info(f"Found {len(matching_contacts)} contacts to clean up")
 
-        # Delete matching contacts
+        # Delete matching contacts using cli.delete_contact()
         deleted_count = 0
         for contact in matching_contacts:
-            name = contact.get('name', '')
-            if not name:
+            # Prefer public_key for deletion (more reliable than name)
+            selector = contact.get('public_key') or contact.get('name', '')
+            if not selector:
                 continue
 
             try:
-                delete_response = requests.post(
-                    config.MC_BRIDGE_URL,
-                    json={'args': ['contact', '-d', name]},
-                    timeout=30
-                )
-
-                if delete_response.status_code == 200:
-                    delete_data = delete_response.json()
-                    if delete_data.get('success'):
-                        deleted_count += 1
-                        logger.debug(f"Deleted contact: {name}")
-                    else:
-                        logger.warning(f"Failed to delete contact {name}: {delete_data.get('error')}")
+                success, message = cli.delete_contact(selector)
+                if success:
+                    deleted_count += 1
+                    logger.debug(f"Deleted contact: {contact.get('name', selector)}")
                 else:
-                    logger.warning(f"Failed to delete contact {name}: HTTP {delete_response.status_code}")
+                    logger.warning(f"Failed to delete contact {contact.get('name', selector)}: {message}")
             except Exception as e:
-                logger.warning(f"Error deleting contact {name}: {e}")
+                logger.warning(f"Error deleting contact {contact.get('name', selector)}: {e}")
 
         logger.info(f"Cleanup job completed: deleted {deleted_count}/{len(matching_contacts)} contacts")
 
