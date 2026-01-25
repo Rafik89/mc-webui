@@ -283,8 +283,8 @@ def _cleanup_job():
 
         # Get contacts from device
         import requests
-        response = requests.get(
-            f"{config.BRIDGE_URL}/cli",
+        response = requests.post(
+            config.MC_BRIDGE_URL,
             json={'args': ['contacts']},
             timeout=30
         )
@@ -343,7 +343,7 @@ def _cleanup_job():
 
             try:
                 delete_response = requests.post(
-                    f"{config.BRIDGE_URL}/cli",
+                    config.MC_BRIDGE_URL,
                     json={'args': ['contact', '-d', name]},
                     timeout=30
                 )
