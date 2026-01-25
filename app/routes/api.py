@@ -192,7 +192,8 @@ def get_cleanup_settings() -> dict:
             'types': list[int],
             'date_field': str,
             'days': int,
-            'name_filter': str
+            'name_filter': str,
+            'hour': int (0-23, UTC)
         }
     """
     from pathlib import Path
@@ -201,7 +202,8 @@ def get_cleanup_settings() -> dict:
         'types': [1, 2, 3, 4],
         'date_field': 'last_advert',
         'days': 30,
-        'name_filter': ''
+        'name_filter': '',
+        'hour': 1
     }
 
     settings_path = Path(config.MC_CONFIG_DIR) / ".webui_settings.json"
@@ -2023,7 +2025,8 @@ def update_cleanup_settings_api():
             "types": [1, 2],
             "date_field": "last_advert",
             "days": 30,
-            "name_filter": ""
+            "name_filter": "",
+            "hour": 1
         }
 
     Returns:
@@ -2066,6 +2069,13 @@ def update_cleanup_settings_api():
                     'error': 'Invalid enabled (must be boolean)'
                 }), 400
 
+        if 'hour' in data:
+            if not isinstance(data['hour'], int) or data['hour'] < 0 or data['hour'] > 23:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid hour (must be integer 0-23)'
+                }), 400
+
         # Get current settings and merge with new values
         current = get_cleanup_settings()
         updated = {**current, **data}
@@ -2077,9 +2087,9 @@ def update_cleanup_settings_api():
                 'error': 'Failed to save cleanup settings'
             }), 500
 
-        # Update scheduler based on enabled state
+        # Update scheduler based on enabled state and hour
         from app.archiver.manager import schedule_cleanup
-        schedule_cleanup(enabled=updated.get('enabled', False))
+        schedule_cleanup(enabled=updated.get('enabled', False), hour=updated.get('hour', 1))
 
         return jsonify({
             'success': True,

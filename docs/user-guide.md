@@ -282,6 +282,25 @@ The advanced cleanup tool allows you to filter and remove contacts based on mult
 - Remove all REP contacts inactive for 30+ days: Select REP, set days to 30
 - Clean specific contact names: Enter partial name (e.g., "test")
 
+### Automatic Contact Cleanup
+
+You can schedule automatic cleanup to run daily at a specified hour (UTC):
+
+1. Navigate to **Contact Management** page
+2. Expand **Advanced Filters** section
+3. Configure your filter criteria (types, date field, days of inactivity)
+4. Toggle **Enable Auto-Cleanup** switch
+5. Select the hour (UTC) when cleanup should run
+
+**Requirements for enabling auto-cleanup:**
+- "Days of Inactivity" must be set to a value greater than 0
+- At least one contact type must be selected
+
+**Notes:**
+- Protected contacts are never deleted by auto-cleanup
+- Filter criteria changes are auto-saved when auto-cleanup is enabled
+- The scheduler runs in UTC timezone
+
 ---
 
 ## Network Commands

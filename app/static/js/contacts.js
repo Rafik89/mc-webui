@@ -224,6 +224,17 @@ function attachManageEventListeners() {
     document.querySelectorAll('input[name="cleanupDateField"]').forEach(radio => {
         radio.addEventListener('change', debouncedSaveCleanupCriteria);
     });
+
+    // Cleanup hour selector (only saves when auto-cleanup is enabled)
+    const cleanupHour = document.getElementById('cleanupHour');
+    if (cleanupHour) {
+        cleanupHour.addEventListener('change', () => {
+            // Only save if auto-cleanup is enabled
+            if (autoCleanupSettings && autoCleanupSettings.enabled) {
+                saveCleanupSettings(true);
+            }
+        });
+    }
 }
 
 async function loadContactCounts() {
@@ -334,14 +345,23 @@ function applyCleanupSettingsToUI(settings) {
     // Auto-cleanup switch and status
     const autoCleanupSwitch = document.getElementById('autoCleanupSwitch');
     const statusText = document.getElementById('autoCleanupStatusText');
+    const hourSelect = document.getElementById('cleanupHour');
 
     if (autoCleanupSwitch) {
         autoCleanupSwitch.checked = settings.enabled || false;
     }
 
+    // Hour selector
+    const hour = settings.hour !== undefined ? settings.hour : 1;
+    if (hourSelect) {
+        hourSelect.value = hour;
+        hourSelect.disabled = !settings.enabled;
+    }
+
     if (statusText) {
         if (settings.enabled) {
-            statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+            const hourStr = hour.toString().padStart(2, '0');
+            statusText.textContent = `Enabled (runs daily at ${hourStr}:00 UTC)`;
             statusText.classList.remove('text-muted');
             statusText.classList.add('text-success');
         } else {
@@ -359,6 +379,7 @@ function applyCleanupSettingsToUI(settings) {
 async function handleAutoCleanupToggle(event) {
     const enabled = event.target.checked;
     const statusText = document.getElementById('autoCleanupStatusText');
+    const hourSelect = document.getElementById('cleanupHour');
 
     // Validate before enabling
     if (enabled) {
@@ -379,6 +400,11 @@ async function handleAutoCleanupToggle(event) {
         }
     }
 
+    // Enable/disable hour selector
+    if (hourSelect) {
+        hourSelect.disabled = !enabled;
+    }
+
     // Update status text while saving
     if (statusText) {
         statusText.textContent = 'Saving...';
@@ -389,8 +415,11 @@ async function handleAutoCleanupToggle(event) {
     const success = await saveCleanupSettings(enabled);
 
     if (!success) {
-        // Revert switch on failure
+        // Revert switch and hour selector on failure
         event.target.checked = !enabled;
+        if (hourSelect) {
+            hourSelect.disabled = enabled;
+        }
     }
 }
 
@@ -422,13 +451,16 @@ function debouncedSaveCleanupCriteria() {
 async function saveCleanupSettings(enabled) {
     const criteria = collectCleanupCriteria();
     const statusText = document.getElementById('autoCleanupStatusText');
+    const hourSelect = document.getElementById('cleanupHour');
+    const hour = hourSelect ? parseInt(hourSelect.value) : 1;
 
     const settings = {
         enabled: enabled,
         types: criteria.types,
         date_field: criteria.date_field,
         days: criteria.days,
-        name_filter: criteria.name_filter
+        name_filter: criteria.name_filter,
+        hour: hour
     };
 
     try {
@@ -448,7 +480,9 @@ async function saveCleanupSettings(enabled) {
             // Update status text
             if (statusText) {
                 if (data.settings.enabled) {
-                    statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+                    const savedHour = data.settings.hour !== undefined ? data.settings.hour : 1;
+                    const hourStr = savedHour.toString().padStart(2, '0');
+                    statusText.textContent = `Enabled (runs daily at ${hourStr}:00 UTC)`;
                     statusText.classList.remove('text-muted');
                     statusText.classList.add('text-success');
                 } else {
@@ -467,7 +501,9 @@ async function saveCleanupSettings(enabled) {
             // Restore previous status
             if (statusText && autoCleanupSettings) {
                 if (autoCleanupSettings.enabled) {
-                    statusText.textContent = 'Enabled (runs daily at 01:00 UTC)';
+                    const prevHour = autoCleanupSettings.hour !== undefined ? autoCleanupSettings.hour : 1;
+                    const hourStr = prevHour.toString().padStart(2, '0');
+                    statusText.textContent = `Enabled (runs daily at ${hourStr}:00 UTC)`;
                 } else {
                     statusText.textContent = 'Disabled';
                 }

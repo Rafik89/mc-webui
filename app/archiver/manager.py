@@ -335,12 +335,13 @@ def _cleanup_job():
         logger.error(f"Cleanup job failed: {e}", exc_info=True)
 
 
-def schedule_cleanup(enabled: bool) -> bool:
+def schedule_cleanup(enabled: bool, hour: int = 1) -> bool:
     """
     Add or remove the cleanup job from the scheduler.
 
     Args:
         enabled: True to enable cleanup job, False to disable
+        hour: Hour (0-23 UTC) at which to run cleanup job
 
     Returns:
         True if successful, False otherwise
@@ -353,8 +354,12 @@ def schedule_cleanup(enabled: bool) -> bool:
 
     try:
         if enabled:
-            # Add cleanup job at 01:00 UTC
-            trigger = CronTrigger(hour=1, minute=0)
+            # Validate hour
+            if not isinstance(hour, int) or hour < 0 or hour > 23:
+                hour = 1
+
+            # Add cleanup job at specified hour UTC
+            trigger = CronTrigger(hour=hour, minute=0)
 
             _scheduler.add_job(
                 func=_cleanup_job,
@@ -364,7 +369,7 @@ def schedule_cleanup(enabled: bool) -> bool:
                 replace_existing=True
             )
 
-            logger.info("Cleanup job scheduled - will run daily at 01:00 UTC")
+            logger.info(f"Cleanup job scheduled - will run daily at {hour:02d}:00 UTC")
         else:
             # Remove cleanup job if it exists
             try:
@@ -393,8 +398,9 @@ def init_cleanup_schedule():
         settings = get_cleanup_settings()
 
         if settings.get('enabled'):
-            schedule_cleanup(enabled=True)
-            logger.info("Auto-cleanup enabled from saved settings")
+            hour = settings.get('hour', 1)
+            schedule_cleanup(enabled=True, hour=hour)
+            logger.info(f"Auto-cleanup enabled from saved settings (hour={hour:02d}:00 UTC)")
         else:
             logger.info("Auto-cleanup is disabled in saved settings")
 
