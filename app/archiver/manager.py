@@ -283,7 +283,9 @@ def _cleanup_job():
             return
 
         # Get contacts using the same method as preview-cleanup
+        logger.info("Fetching contacts from device...")
         success, contacts_detailed, error = cli.get_contacts_with_last_seen()
+        logger.info(f"get_contacts_with_last_seen returned: success={success}, contacts_count={len(contacts_detailed)}, error={error}")
 
         if not success:
             logger.error(f"Failed to get contacts: {error}")
@@ -306,7 +308,7 @@ def _cleanup_job():
                 'adv_lon': details.get('adv_lon')
             })
 
-        logger.info(f"Loaded {len(contacts)} contacts from device")
+        logger.info(f"Converted {len(contacts)} contacts to list format")
 
         if not contacts:
             logger.info("No contacts found, nothing to clean up")
@@ -319,9 +321,11 @@ def _cleanup_job():
             'days': settings.get('days', 30),
             'name_filter': settings.get('name_filter', '')
         }
+        logger.info(f"Filter criteria: types={criteria['types']}, date_field={criteria['date_field']}, days={criteria['days']}, name_filter='{criteria['name_filter']}'")
 
         # Get protected contacts
         protected = get_protected_contacts()
+        logger.info(f"Protected contacts count: {len(protected)}")
 
         # Filter contacts (this function excludes protected contacts)
         matching_contacts = _filter_contacts_by_criteria(contacts, criteria, protected)
