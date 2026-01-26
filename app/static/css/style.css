@@ -902,3 +902,88 @@ main {
     color: #212529;
     background-color: #FF9800;
 }
+
+/* =============================================================================
+   Mentions Autocomplete Popup
+   ============================================================================= */
+
+.mentions-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    z-index: 1001;
+    margin-bottom: 0.5rem;
+    max-height: 200px;
+    width: 280px;
+    overflow-y: auto;
+    background-color: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.mentions-popup.hidden {
+    display: none;
+}
+
+.mentions-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.mention-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9rem;
+    transition: background-color 0.1s ease;
+}
+
+.mention-item:last-child {
+    border-bottom: none;
+}
+
+.mention-item:hover,
+.mention-item.highlighted {
+    background-color: #e7f1ff;
+}
+
+.mention-item-name {
+    font-weight: 500;
+}
+
+.mentions-empty {
+    padding: 0.75rem;
+    text-align: center;
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 576px) {
+    .mentions-popup {
+        width: 100%;
+        max-width: none;
+        left: 0;
+        right: 0;
+    }
+}
+
+/* Mentions popup scrollbar */
+.mentions-popup::-webkit-scrollbar {
+    width: 6px;
+}
+
+.mentions-popup::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.mentions-popup::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}
+
+.mentions-popup::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
+}

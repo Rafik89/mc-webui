@@ -22,6 +22,13 @@ let markersGroup = null;
 let contactsGeoCache = {};  // { 'contactName': { lat, lon }, ... }
 let allContactsWithGps = [];  // Cached contacts for map filtering
 
+// Mentions autocomplete state
+let mentionsCache = [];              // Cached contact list
+let mentionsCacheTimestamp = 0;      // Cache timestamp
+let mentionStartPos = -1;            // Position of @ in textarea
+let mentionSelectedIndex = 0;        // Currently highlighted item
+let isMentionMode = false;           // Is mention dropdown active
+
 // Contact type colors for map markers
 const CONTACT_TYPE_COLORS = {
     1: '#2196F3',  // CLI - blue
@@ -388,6 +395,9 @@ function setupEventListeners() {
     input.addEventListener('input', function() {
         updateCharCounter();
     });
+
+    // Setup mentions autocomplete
+    setupMentionsAutocomplete();
 
     // Manual refresh button
     document.getElementById('refreshBtn').addEventListener('click', async function() {
@@ -2420,5 +2430,268 @@ function loadPendingTypeFilter() {
     }
     // Default: CLI only (most common use case)
     return [1];
+}
+
+// =============================================================================
+// Mentions Autocomplete Functions
+// =============================================================================
+
+/**
+ * Setup mentions autocomplete functionality
+ */
+function setupMentionsAutocomplete() {
+    const input = document.getElementById('messageInput');
+    const popup = document.getElementById('mentionsPopup');
+
+    if (!input || !popup) {
+        console.warn('[mentions] Required elements not found');
+        return;
+    }
+
+    // Track @ trigger on input
+    input.addEventListener('input', handleMentionInput);
+
+    // Handle keyboard navigation
+    input.addEventListener('keydown', handleMentionKeydown);
+
+    // Close popup on blur (with delay to allow click selection)
+    input.addEventListener('blur', function() {
+        setTimeout(hideMentionsPopup, 200);
+    });
+
+    // Preload contacts on focus
+    input.addEventListener('focus', function() {
+        loadContactsForMentions();
+    });
+
+    // Click outside to close
+    document.addEventListener('click', function(e) {
+        if (!popup.contains(e.target) && e.target !== input) {
+            hideMentionsPopup();
+        }
+    });
+
+    console.log('[mentions] Autocomplete initialized');
+}
+
+/**
+ * Handle input event for mention detection
+ */
+function handleMentionInput(e) {
+    const input = e.target;
+    const cursorPos = input.selectionStart;
+    const text = input.value;
+
+    // Find @ character before cursor
+    const textBeforeCursor = text.substring(0, cursorPos);
+    const lastAtPos = textBeforeCursor.lastIndexOf('@');
+
+    // Check if we should be in mention mode
+    if (lastAtPos >= 0) {
+        // Check if there's a space or newline between @ and cursor (mention ended)
+        const textAfterAt = textBeforeCursor.substring(lastAtPos + 1);
+
+        // Allow alphanumeric, underscore, dash, emoji, and other non-whitespace chars in username
+        // Space or newline ends the mention
+        if (!/[\s\n]/.test(textAfterAt)) {
+            // We're in mention mode
+            mentionStartPos = lastAtPos;
+            isMentionMode = true;
+            const query = textAfterAt;
+            showMentionsPopup(query);
+            return;
+        }
+    }
+
+    // Not in mention mode
+    if (isMentionMode) {
+        hideMentionsPopup();
+    }
+}
+
+/**
+ * Handle keyboard navigation in mentions popup
+ */
+function handleMentionKeydown(e) {
+    if (!isMentionMode) return;
+
+    const popup = document.getElementById('mentionsPopup');
+    const items = popup.querySelectorAll('.mention-item');
+
+    if (items.length === 0) return;
+
+    switch (e.key) {
+        case 'ArrowDown':
+            e.preventDefault();
+            mentionSelectedIndex = Math.min(mentionSelectedIndex + 1, items.length - 1);
+            updateMentionHighlight(items);
+            break;
+
+        case 'ArrowUp':
+            e.preventDefault();
+            mentionSelectedIndex = Math.max(mentionSelectedIndex - 1, 0);
+            updateMentionHighlight(items);
+            break;
+
+        case 'Enter':
+        case 'Tab':
+            if (items.length > 0 && mentionSelectedIndex < items.length) {
+                e.preventDefault();
+                const selected = items[mentionSelectedIndex];
+                if (selected && selected.dataset.contact) {
+                    selectMentionContact(selected.dataset.contact);
+                }
+            }
+            break;
+
+        case 'Escape':
+            e.preventDefault();
+            hideMentionsPopup();
+            break;
+    }
+}
+
+/**
+ * Show mentions popup with filtered contacts
+ */
+function showMentionsPopup(query) {
+    const popup = document.getElementById('mentionsPopup');
+    const list = document.getElementById('mentionsList');
+
+    // Filter contacts
+    const filtered = filterContacts(query);
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="mentions-empty">No contacts found</div>';
+        popup.classList.remove('hidden');
+        return;
+    }
+
+    // Reset selection index if out of bounds
+    if (mentionSelectedIndex >= filtered.length) {
+        mentionSelectedIndex = 0;
+    }
+
+    // Build list HTML
+    list.innerHTML = filtered.map((contact, index) => {
+        const highlighted = index === mentionSelectedIndex ? 'highlighted' : '';
+        const escapedName = escapeHtml(contact);
+        return `<div class="mention-item ${highlighted}" data-contact="${escapedName}" data-index="${index}">
+            <span class="mention-item-name">${escapedName}</span>
+        </div>`;
+    }).join('');
+
+    // Add click handlers
+    list.querySelectorAll('.mention-item').forEach(item => {
+        item.addEventListener('click', function() {
+            selectMentionContact(this.dataset.contact);
+        });
+    });
+
+    // Close emoji picker if open (avoid overlapping popups)
+    const emojiPopup = document.getElementById('emojiPickerPopup');
+    if (emojiPopup && !emojiPopup.classList.contains('hidden')) {
+        emojiPopup.classList.add('hidden');
+    }
+
+    popup.classList.remove('hidden');
+}
+
+/**
+ * Hide mentions popup and reset state
+ */
+function hideMentionsPopup() {
+    const popup = document.getElementById('mentionsPopup');
+    if (popup) {
+        popup.classList.add('hidden');
+    }
+    isMentionMode = false;
+    mentionStartPos = -1;
+    mentionSelectedIndex = 0;
+}
+
+/**
+ * Filter contacts by query (matches any part of name)
+ */
+function filterContacts(query) {
+    if (!mentionsCache || mentionsCache.length === 0) {
+        return [];
+    }
+
+    const lowerQuery = query.toLowerCase();
+
+    // Filter by any part of the name (not just prefix)
+    return mentionsCache.filter(contact =>
+        contact.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);  // Limit to 10 results for performance
+}
+
+/**
+ * Update highlight on mention items
+ */
+function updateMentionHighlight(items) {
+    items.forEach((item, index) => {
+        if (index === mentionSelectedIndex) {
+            item.classList.add('highlighted');
+            // Scroll item into view if needed
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('highlighted');
+        }
+    });
+}
+
+/**
+ * Select a contact and insert mention into textarea
+ */
+function selectMentionContact(contactName) {
+    const input = document.getElementById('messageInput');
+    const text = input.value;
+
+    // Replace from @ position to cursor with @[contactName]
+    const beforeMention = text.substring(0, mentionStartPos);
+    const afterCursor = text.substring(input.selectionStart);
+
+    const mention = `@[${contactName}] `;
+    input.value = beforeMention + mention + afterCursor;
+
+    // Set cursor position after the mention
+    const newCursorPos = mentionStartPos + mention.length;
+    input.setSelectionRange(newCursorPos, newCursorPos);
+
+    // Update character counter
+    updateCharCounter();
+
+    // Hide popup and reset state
+    hideMentionsPopup();
+
+    // Keep focus on input
+    input.focus();
+}
+
+/**
+ * Load contacts for mentions autocomplete (with caching)
+ */
+async function loadContactsForMentions() {
+    const CACHE_TTL = 60000;  // 60 seconds
+    const now = Date.now();
+
+    // Return cached if still valid
+    if (mentionsCache.length > 0 && (now - mentionsCacheTimestamp) < CACHE_TTL) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/contacts');
+        const data = await response.json();
+
+        if (data.success && data.contacts) {
+            mentionsCache = data.contacts;
+            mentionsCacheTimestamp = now;
+            console.log(`[mentions] Cached ${mentionsCache.length} contacts`);
+        }
+    } catch (error) {
+        console.error('[mentions] Error loading contacts:', error);
+    }
 }
 
