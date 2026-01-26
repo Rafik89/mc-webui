@@ -702,6 +702,11 @@ function createMessageElement(msg) {
                 <div class="message-footer own">
                     <span class="message-time">${time}</span>
                 </div>
+                <div class="message-actions justify-content-end">
+                    <button class="btn btn-outline-secondary btn-msg-action" onclick='resendMessage(${JSON.stringify(msg.content)})' title="Resend">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
             </div>
         `;
     } else {
@@ -830,6 +835,17 @@ function quoteTo(username, content) {
     }
 
     input.value = `@[${username}] »${quotedText}« `;
+    updateCharCounter();
+    input.focus();
+}
+
+/**
+ * Resend a message (paste content back to input)
+ * @param {string} content - Message content to resend
+ */
+function resendMessage(content) {
+    const input = document.getElementById('messageInput');
+    input.value = content;
     updateCharCounter();
     input.focus();
 }
@@ -1596,7 +1612,7 @@ function updateCharCounter() {
     // Count UTF-8 bytes, not Unicode characters
     const encoder = new TextEncoder();
     const byteLength = encoder.encode(input.value).length;
-    const maxBytes = 140;
+    const maxBytes = 135;
 
     counter.textContent = `${byteLength} / ${maxBytes}`;
 

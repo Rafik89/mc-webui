@@ -418,13 +418,19 @@ function displayMessages(messages) {
             if (msg.snr !== null && msg.snr !== undefined) {
                 parts.push(`SNR: ${msg.snr.toFixed(1)}`);
             }
-            if (msg.path_len !== null && msg.path_len !== undefined) {
-                parts.push(`Hops: ${msg.path_len}`);
-            }
             if (parts.length > 0) {
                 meta = `<div class="dm-meta">${parts.join(' | ')}</div>`;
             }
         }
+
+        // Resend button for own messages
+        const resendBtn = msg.is_own ? `
+            <div class="dm-actions">
+                <button class="btn btn-outline-secondary btn-sm dm-action-btn" onclick='resendMessage(${JSON.stringify(msg.content)})' title="Resend">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
+            </div>
+        ` : '';
 
         div.innerHTML = `
             <div class="d-flex justify-content-between align-items-center" style="font-size: 0.7rem;">
@@ -433,6 +439,7 @@ function displayMessages(messages) {
             </div>
             <div>${processMessageContent(msg.content)}</div>
             ${meta}
+            ${resendBtn}
         `;
 
         container.appendChild(div);
@@ -539,7 +546,7 @@ async function checkForNewMessages() {
 }
 
 /**
- * Update character counter (counts UTF-8 bytes, limit is 140)
+ * Update character counter (counts UTF-8 bytes, limit is 150)
  */
 function updateCharCounter() {
     const input = document.getElementById('dmMessageInput');
@@ -548,7 +555,7 @@ function updateCharCounter() {
 
     const encoder = new TextEncoder();
     const byteLength = encoder.encode(input.value).length;
-    const maxBytes = 140;
+    const maxBytes = 150;
     counter.textContent = byteLength;
 
     // Visual warning when approaching limit
@@ -562,6 +569,18 @@ function updateCharCounter() {
         counter.classList.remove('text-danger', 'text-warning');
         counter.classList.add('text-muted');
     }
+}
+
+/**
+ * Resend a message (paste content back to input)
+ * @param {string} content - Message content to resend
+ */
+function resendMessage(content) {
+    const input = document.getElementById('dmMessageInput');
+    if (!input) return;
+    input.value = content;
+    updateCharCounter();
+    input.focus();
 }
 
 /**

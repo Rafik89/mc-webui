@@ -128,7 +128,7 @@ For detailed feature documentation, see the [User Guide](docs/user-guide.md).
 ## Basic Usage
 
 1. **View messages** - Main page shows chat history with auto-refresh every 10 seconds
-2. **Send messages** - Type in the text field and press Enter (140 byte limit)
+2. **Send messages** - Type in the text field and press Enter (135 bytes for channels, 150 bytes for DM)
 3. **Switch channels** - Use the dropdown in navbar
 4. **Direct Messages** - Access via menu (☰) → "Direct Messages"
 5. **Manage contacts** - Access via menu (☰) → "Contact Management"

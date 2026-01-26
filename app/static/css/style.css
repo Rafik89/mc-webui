@@ -526,6 +526,19 @@ main {
     color: #dc3545;
 }
 
+/* DM Action Buttons */
+.dm-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.25rem;
+}
+
+.dm-action-btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
 /* DM Conversation List Item */
 .dm-conversation-item {
     padding: 0.75rem;
