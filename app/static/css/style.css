@@ -133,7 +133,9 @@ main {
 .message-actions {
     display: flex;
     gap: 0.25rem;
-    margin-top: 0.25rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Message Bubbles */
@@ -851,13 +853,13 @@ main {
 
 /* Icon-only action buttons on message bubbles */
 .btn-msg-action {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 0.875rem;
 }
 
 /* =============================================================================

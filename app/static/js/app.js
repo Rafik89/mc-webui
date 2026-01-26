@@ -719,11 +719,11 @@ function createMessageElement(msg) {
                 </div>
                 <div class="message own">
                     <div class="message-content">${processMessageContent(msg.content)}</div>
-                </div>
-                <div class="message-actions justify-content-end">
-                    <button class="btn btn-outline-secondary btn-msg-action" onclick='resendMessage(${JSON.stringify(msg.content)})' title="Resend">
-                        <i class="bi bi-arrow-repeat"></i>
-                    </button>
+                    <div class="message-actions justify-content-end">
+                        <button class="btn btn-outline-secondary btn-msg-action" onclick='resendMessage(${JSON.stringify(msg.content)})' title="Resend">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -747,19 +747,19 @@ function createMessageElement(msg) {
                 <div class="message other">
                     <div class="message-content">${processMessageContent(msg.content)}</div>
                     ${metaInfo ? `<div class="message-meta">${metaInfo}</div>` : ''}
-                </div>
-                <div class="message-actions">
-                    <button class="btn btn-outline-secondary btn-msg-action" onclick="replyTo('${escapeHtml(msg.sender)}')" title="Reply">
-                        <i class="bi bi-reply"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary btn-msg-action" onclick='quoteTo(${JSON.stringify(msg.sender)}, ${JSON.stringify(msg.content)})' title="Quote">
-                        <i class="bi bi-quote"></i>
-                    </button>
-                    ${contactsGeoCache[msg.sender] ? `
-                        <button class="btn btn-outline-primary btn-msg-action" onclick="showContactOnMap('${escapeHtml(msg.sender)}', ${contactsGeoCache[msg.sender].lat}, ${contactsGeoCache[msg.sender].lon})" title="Show on map">
-                            <i class="bi bi-geo-alt"></i>
+                    <div class="message-actions">
+                        <button class="btn btn-outline-secondary btn-msg-action" onclick="replyTo('${escapeHtml(msg.sender)}')" title="Reply">
+                            <i class="bi bi-reply"></i>
                         </button>
-                    ` : ''}
+                        <button class="btn btn-outline-secondary btn-msg-action" onclick='quoteTo(${JSON.stringify(msg.sender)}, ${JSON.stringify(msg.content)})' title="Quote">
+                            <i class="bi bi-quote"></i>
+                        </button>
+                        ${contactsGeoCache[msg.sender] ? `
+                            <button class="btn btn-outline-secondary btn-msg-action" onclick="showContactOnMap('${escapeHtml(msg.sender)}', ${contactsGeoCache[msg.sender].lat}, ${contactsGeoCache[msg.sender].lon})" title="Show on map">
+                                <i class="bi bi-geo-alt"></i>
+                            </button>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
         `;
