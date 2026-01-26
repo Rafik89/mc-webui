@@ -439,12 +439,30 @@ function setupEventListeners() {
         });
     }
 
-    // Track user scrolling
+    // Track user scrolling and show/hide scroll-to-bottom button
     const container = document.getElementById('messagesContainer');
+    const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
     container.addEventListener('scroll', function() {
         const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
         isUserScrolling = !isAtBottom;
+
+        // Show/hide scroll-to-bottom button
+        if (scrollToBottomBtn) {
+            if (isAtBottom) {
+                scrollToBottomBtn.classList.remove('visible');
+            } else {
+                scrollToBottomBtn.classList.add('visible');
+            }
+        }
     });
+
+    // Scroll-to-bottom button click handler
+    if (scrollToBottomBtn) {
+        scrollToBottomBtn.addEventListener('click', function() {
+            scrollToBottom();
+            scrollToBottomBtn.classList.remove('visible');
+        });
+    }
 
     // Load device info when modal opens
     const deviceInfoModal = document.getElementById('deviceInfoModal');
