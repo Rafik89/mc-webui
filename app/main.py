@@ -87,6 +87,7 @@ def clean_console_output(output: str, command: str) -> str:
     """
     Clean meshcli console output by removing:
     - Prompt lines (e.g., "MarWoj|*" or "DeviceName|*[E]")
+    - JSON packet lines (internal mesh protocol data)
     - Echoed command line
     - Leading/trailing whitespace
     """
@@ -110,6 +111,10 @@ def clean_console_output(output: str, command: str) -> str:
 
         # Skip any line that starts with the meshcli prompt pattern
         if prompt_pattern.match(stripped):
+            continue
+
+        # Skip JSON packet lines (internal mesh protocol data)
+        if stripped.startswith('{') and '"payload_typename"' in stripped:
             continue
 
         cleaned_lines.append(line)
