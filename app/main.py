@@ -133,7 +133,8 @@ def clean_console_output(output: str, command: str) -> str:
             continue
 
         # Skip JSON packet lines (internal mesh protocol data)
-        if stripped.startswith('{') and '"payload_typename"' in stripped:
+        stripped_full = stripped.lstrip()
+        if stripped_full.startswith('{') and '"payload_typename"' in stripped_full:
             continue
 
         cleaned_lines.append(line)
