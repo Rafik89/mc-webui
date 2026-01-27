@@ -382,6 +382,17 @@ class MeshCLISession:
     def _monitor_response_timeout(self, cmd_id, response_dict, event, timeout_ms=300):
         """Monitor if response has finished (no new lines for timeout_ms)"""
         try:
+            start_time = time.time()
+            # Get command timeout from response_dict (default 10s)
+            cmd_timeout = response_dict.get("timeout", 10)
+
+            # For slow commands (timeout >= 15s like node_discover), wait minimum time before allowing completion
+            # because meshcli may echo prompt immediately but real results come later
+            is_slow_command = cmd_timeout >= 15
+            min_elapsed = (cmd_timeout * 0.7) if is_slow_command else 0
+
+            logger.info(f"Monitor [{cmd_id}] started, cmd_timeout={cmd_timeout}s, min_elapsed={min_elapsed:.1f}s")
+
             while not self.shutdown_flag.is_set():
                 time.sleep(timeout_ms / 1000.0)
 
@@ -392,10 +403,17 @@ class MeshCLISession:
 
                     # Check if we got new lines recently
                     time_since_last_line = time.time() - response_dict.get("last_line_time", 0)
+                    total_elapsed = time.time() - start_time
+                    has_output = len(response_dict.get("response", [])) > 0
 
-                    if time_since_last_line >= (timeout_ms / 1000.0):
+                    # Can only complete if:
+                    # 1. Minimum elapsed time has passed (for slow commands), AND
+                    # 2. We have output AND no new lines for timeout_ms
+                    can_complete = total_elapsed >= min_elapsed
+
+                    if can_complete and has_output and time_since_last_line >= (timeout_ms / 1000.0):
                         # No new lines for timeout period - mark as done
-                        logger.info(f"Command [{cmd_id}] completed (timeout-based)")
+                        logger.info(f"Command [{cmd_id}] completed (timeout-based, has_output={has_output})")
                         response_dict["done"] = True
                         event.set()
 
@@ -514,7 +532,8 @@ class MeshCLISession:
             "response": [],
             "done": False,
             "error": None,
-            "last_line_time": time.time()
+            "last_line_time": time.time(),
+            "timeout": timeout  # Pass timeout to monitor thread
         }
 
         # Queue command
@@ -603,7 +622,8 @@ class MeshCLISession:
             "done": False,
             "error": None,
             "last_line_time": time.time(),
-            "socket_id": socket_id  # Track which WebSocket client sent this
+            "socket_id": socket_id,  # Track which WebSocket client sent this
+            "timeout": timeout  # Pass timeout to monitor thread
         }
 
         # Queue command
