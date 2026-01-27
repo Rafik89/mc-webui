@@ -22,6 +22,10 @@ SLOW_COMMANDS = {
     'recv': 60,
     'send': 15,
     'send_msg': 15,
+    # Repeater commands
+    'req_status': 15,
+    'req_neighbours': 15,
+    'trace': 15,
 }
 
 # Configure logging
