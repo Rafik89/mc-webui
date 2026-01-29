@@ -154,6 +154,78 @@
             to { transform: rotate(360deg); }
         }
 
+        /* History dropdown */
+        .history-dropdown {
+            position: relative;
+        }
+
+        .history-btn {
+            background-color: #0f3460;
+            border: 1px solid #1a1a2e;
+            color: #4ecdc4;
+        }
+
+        .history-btn:hover, .history-btn:focus {
+            background-color: #1a1a4e;
+            border-color: #4ecdc4;
+            color: #4ecdc4;
+        }
+
+        .history-btn:disabled {
+            background-color: #0a1628;
+            color: #444;
+        }
+
+        .history-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            min-width: 250px;
+            max-width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 0.375rem;
+            margin-bottom: 0.25rem;
+            display: none;
+            z-index: 1000;
+        }
+
+        .history-menu.show {
+            display: block;
+        }
+
+        .history-item {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            color: #e0e0e0;
+            text-decoration: none;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.85rem;
+            border: none;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-item:hover {
+            background-color: #0f3460;
+            color: #00ff88;
+        }
+
+        .history-empty {
+            padding: 0.75rem;
+            color: #666;
+            text-align: center;
+            font-style: italic;
+        }
+
         /* Mobile adjustments */
         @media (max-width: 576px) {
             .console-header {
@@ -200,6 +272,15 @@
         <!-- Input Area -->
         <div class="console-input-area">
             <form id="consoleForm" class="d-flex gap-2">
+                <!-- History dropdown -->
+                <div class="history-dropdown">
+                    <button type="button" class="btn history-btn" id="historyBtn" title="Command history" disabled>
+                        <i class="bi bi-clock-history"></i>
+                    </button>
+                    <div class="history-menu" id="historyMenu">
+                        <div class="history-empty">No commands in history</div>
+                    </div>
+                </div>
                 <input type="text"
                        id="commandInput"
                        class="form-control console-input"

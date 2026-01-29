@@ -10,6 +10,7 @@ import time
 import requests
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 from app.meshcore import cli, parser
 from app.config import config, runtime_config
@@ -2757,6 +2758,137 @@ def mark_read_api():
 
     except Exception as e:
         logger.error(f"Error marking as read: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# Console History API
+# ============================================================
+
+CONSOLE_HISTORY_FILE = 'console_history.json'
+CONSOLE_HISTORY_MAX_SIZE = 50
+
+
+def _get_console_history_path():
+    """Get path to console history file"""
+    return Path(config.MC_CONFIG_DIR) / CONSOLE_HISTORY_FILE
+
+
+def _load_console_history():
+    """Load console history from file"""
+    history_path = _get_console_history_path()
+    try:
+        if history_path.exists():
+            with open(history_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('commands', [])
+    except Exception as e:
+        logger.error(f"Error loading console history: {e}")
+    return []
+
+
+def _save_console_history(commands):
+    """Save console history to file"""
+    history_path = _get_console_history_path()
+    try:
+        # Ensure directory exists
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(history_path, 'w', encoding='utf-8') as f:
+            json.dump({'commands': commands}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving console history: {e}")
+        return False
+
+
+@api_bp.route('/console/history', methods=['GET'])
+def get_console_history():
+    """Get console command history"""
+    try:
+        commands = _load_console_history()
+        return jsonify({
+            'success': True,
+            'commands': commands
+        }), 200
+    except Exception as e:
+        logger.error(f"Error getting console history: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/console/history', methods=['POST'])
+def add_console_history():
+    """Add command to console history"""
+    try:
+        data = request.get_json()
+        if not data or 'command' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing command field'
+            }), 400
+
+        command = data['command'].strip()
+        if not command:
+            return jsonify({
+                'success': False,
+                'error': 'Empty command'
+            }), 400
+
+        # Load existing history
+        commands = _load_console_history()
+
+        # Remove command if already exists (will be moved to end)
+        if command in commands:
+            commands.remove(command)
+
+        # Add to end
+        commands.append(command)
+
+        # Limit size
+        if len(commands) > CONSOLE_HISTORY_MAX_SIZE:
+            commands = commands[-CONSOLE_HISTORY_MAX_SIZE:]
+
+        # Save
+        if _save_console_history(commands):
+            return jsonify({
+                'success': True,
+                'commands': commands
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save history'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error adding console history: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/console/history', methods=['DELETE'])
+def clear_console_history():
+    """Clear console command history"""
+    try:
+        if _save_console_history([]):
+            return jsonify({
+                'success': True,
+                'message': 'History cleared'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to clear history'
+            }), 500
+    except Exception as e:
+        logger.error(f"Error clearing console history: {e}")
         return jsonify({
             'success': False,
             'error': str(e)

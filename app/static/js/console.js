@@ -8,15 +8,18 @@
 
 let socket = null;
 let isConnected = false;
-let commandHistory = [];
+let commandHistory = [];      // Local session history (for arrow keys)
+let serverHistory = [];       // Server-persisted history (for dropdown)
 let historyIndex = -1;
 let pendingCommandDiv = null;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Console page initialized');
+    loadServerHistory();
     connectWebSocket();
     setupInputHandlers();
+    setupHistoryDropdown();
 });
 
 /**
@@ -138,7 +141,7 @@ function sendCommand() {
         return;
     }
 
-    // Add to history (avoid duplicates at end)
+    // Add to local history (avoid duplicates at end)
     if (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== command) {
         commandHistory.push(command);
         // Limit history size
@@ -147,6 +150,9 @@ function sendCommand() {
         }
     }
     historyIndex = commandHistory.length;
+
+    // Save to server history (async, don't wait)
+    saveToServerHistory(command);
 
     // Show command in chat with pending indicator
     pendingCommandDiv = addMessage(command, 'command pending');
@@ -251,6 +257,7 @@ function updateStatus(status) {
 function enableInput(enabled) {
     const input = document.getElementById('commandInput');
     const btn = document.getElementById('sendBtn');
+    const historyBtn = document.getElementById('historyBtn');
 
     if (input) {
         input.disabled = !enabled;
@@ -262,6 +269,10 @@ function enableInput(enabled) {
     if (btn) {
         btn.disabled = !enabled;
     }
+
+    if (historyBtn) {
+        historyBtn.disabled = !enabled;
+    }
 }
 
 // Cleanup on page unload
@@ -270,3 +281,143 @@ window.addEventListener('beforeunload', () => {
         socket.disconnect();
     }
 });
+
+
+// ============================================================
+// Server-side command history
+// ============================================================
+
+/**
+ * Load command history from server
+ */
+async function loadServerHistory() {
+    try {
+        const response = await fetch('/api/console/history');
+        const data = await response.json();
+        if (data.success && data.commands) {
+            serverHistory = data.commands;
+            // Also populate local history for arrow key navigation
+            commandHistory = [...serverHistory];
+            historyIndex = commandHistory.length;
+            console.log(`Loaded ${serverHistory.length} commands from server history`);
+        }
+    } catch (error) {
+        console.error('Failed to load server history:', error);
+    }
+}
+
+/**
+ * Save command to server history
+ * @param {string} command Command to save
+ */
+async function saveToServerHistory(command) {
+    try {
+        const response = await fetch('/api/console/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: command })
+        });
+        const data = await response.json();
+        if (data.success && data.commands) {
+            serverHistory = data.commands;
+        }
+    } catch (error) {
+        console.error('Failed to save to server history:', error);
+    }
+}
+
+/**
+ * Setup history dropdown button and menu
+ */
+function setupHistoryDropdown() {
+    const historyBtn = document.getElementById('historyBtn');
+    const historyMenu = document.getElementById('historyMenu');
+
+    if (!historyBtn || !historyMenu) return;
+
+    // Toggle dropdown on button click
+    historyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleHistoryDropdown();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!historyMenu.contains(e.target) && e.target !== historyBtn) {
+            historyMenu.classList.remove('show');
+        }
+    });
+
+    // Close dropdown on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            historyMenu.classList.remove('show');
+        }
+    });
+}
+
+/**
+ * Toggle history dropdown visibility
+ */
+function toggleHistoryDropdown() {
+    const historyMenu = document.getElementById('historyMenu');
+    if (!historyMenu) return;
+
+    if (historyMenu.classList.contains('show')) {
+        historyMenu.classList.remove('show');
+    } else {
+        populateHistoryDropdown();
+        historyMenu.classList.add('show');
+    }
+}
+
+/**
+ * Populate history dropdown with commands
+ */
+function populateHistoryDropdown() {
+    const historyMenu = document.getElementById('historyMenu');
+    if (!historyMenu) return;
+
+    historyMenu.innerHTML = '';
+
+    if (serverHistory.length === 0) {
+        historyMenu.innerHTML = '<div class="history-empty">No commands in history</div>';
+        return;
+    }
+
+    // Show most recent first (reversed)
+    const reversedHistory = [...serverHistory].reverse();
+
+    reversedHistory.forEach((cmd) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'history-item';
+        item.textContent = cmd;
+        item.title = cmd;
+        item.addEventListener('click', () => selectHistoryItem(cmd));
+        historyMenu.appendChild(item);
+    });
+}
+
+/**
+ * Select a command from history dropdown
+ * @param {string} command Command to select
+ */
+function selectHistoryItem(command) {
+    const input = document.getElementById('commandInput');
+    const historyMenu = document.getElementById('historyMenu');
+
+    if (input) {
+        input.value = command;
+        input.focus();
+        // Move cursor to end
+        setTimeout(() => {
+            input.selectionStart = input.selectionEnd = input.value.length;
+        }, 0);
+    }
+
+    if (historyMenu) {
+        historyMenu.classList.remove('show');
+    }
+}
