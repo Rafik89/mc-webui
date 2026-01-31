@@ -1,0 +1,122 @@
+# Container Watchdog
+
+The Container Watchdog is a systemd service that monitors Docker containers and automatically restarts unhealthy ones. This is useful for ensuring reliability, especially on resource-constrained systems.
+
+## Features
+
+- **Health monitoring** - Checks container status every 30 seconds
+- **Automatic restart** - Restarts containers that become unhealthy
+- **Diagnostic logging** - Captures container logs before restart for troubleshooting
+- **HTTP status endpoint** - Query container status via HTTP API
+- **Restart history** - Tracks all automatic restarts with timestamps
+
+## Installation
+
+```bash
+cd ~/mc-webui
+sudo ./scripts/watchdog/install.sh
+```
+
+The installer will:
+- Create a systemd service `mc-webui-watchdog`
+- Start monitoring containers immediately
+- Enable automatic startup on boot
+- Create log file at `/var/log/mc-webui-watchdog.log`
+
+## Usage
+
+### Check service status
+
+```bash
+systemctl status mc-webui-watchdog
+```
+
+### View watchdog logs
+
+```bash
+# Real-time logs
+tail -f /var/log/mc-webui-watchdog.log
+
+# Or via journalctl
+journalctl -u mc-webui-watchdog -f
+```
+
+### HTTP Status Endpoints
+
+The watchdog provides HTTP endpoints on port 5051:
+
+```bash
+# Service health
+curl http://localhost:5051/health
+
+# Container status
+curl http://localhost:5051/status
+
+# Restart history
+curl http://localhost:5051/history
+```
+
+### Diagnostic Files
+
+When a container is restarted, diagnostic information is saved to:
+```
+/tmp/mc-webui-watchdog-{container}-{timestamp}.log
+```
+
+These files contain:
+- Container status at the time of failure
+- Recent container logs (last 200 lines)
+- Timestamp and restart result
+
+## Configuration
+
+The service can be configured via environment variables in the systemd service file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCWEBUI_DIR` | `~/mc-webui` | Path to mc-webui directory |
+| `CHECK_INTERVAL` | `30` | Seconds between health checks |
+| `LOG_FILE` | `/var/log/mc-webui-watchdog.log` | Path to log file |
+| `HTTP_PORT` | `5051` | HTTP status port (0 to disable) |
+
+To modify, edit the service file:
+```bash
+sudo systemctl edit mc-webui-watchdog
+```
+
+## Uninstall
+
+```bash
+sudo ~/mc-webui/scripts/watchdog/install.sh --uninstall
+```
+
+Note: The log file is preserved after uninstall. Remove manually if needed:
+```bash
+sudo rm /var/log/mc-webui-watchdog.log
+```
+
+## Troubleshooting
+
+### Service won't start
+
+Check the logs:
+```bash
+journalctl -u mc-webui-watchdog -n 50
+```
+
+Common issues:
+- Docker not running
+- Python 3 not installed
+- Permission issues
+
+### Containers keep restarting
+
+Check the diagnostic files in `/tmp/mc-webui-watchdog-*.log` to see what's causing the containers to become unhealthy.
+
+### HTTP endpoint not responding
+
+Verify the service is running and check if port 5051 is available:
+```bash
+systemctl status mc-webui-watchdog
+ss -tlnp | grep 5051
+```

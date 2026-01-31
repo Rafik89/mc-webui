@@ -281,6 +281,7 @@ sudo ~/mc-webui/scripts/updater/install.sh --uninstall
 | [Architecture](docs/architecture.md) | Technical details, API reference |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
 | [Docker Installation](docs/docker-install.md) | How to install Docker on Debian/Ubuntu |
+| [Container Watchdog](docs/watchdog.md) | Auto-restart for unhealthy containers |
 
 ---
 
