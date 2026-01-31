@@ -68,20 +68,28 @@ These files contain:
 - Recent container logs (last 200 lines)
 - Timestamp and restart result
 
-## Configuration
+## Configuration (Optional)
 
-The service can be configured via environment variables in the systemd service file:
+**No configuration required** - the installer automatically detects paths and sets sensible defaults.
+
+If you need to customize the behavior, the service supports these environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MCWEBUI_DIR` | `~/mc-webui` | Path to mc-webui directory |
+| `MCWEBUI_DIR` | *(auto-detected)* | Path to mc-webui directory |
 | `CHECK_INTERVAL` | `30` | Seconds between health checks |
 | `LOG_FILE` | `/var/log/mc-webui-watchdog.log` | Path to log file |
 | `HTTP_PORT` | `5051` | HTTP status port (0 to disable) |
 
-To modify, edit the service file:
+To modify defaults, create an override file:
 ```bash
 sudo systemctl edit mc-webui-watchdog
+```
+
+Then add your overrides, for example:
+```ini
+[Service]
+Environment=CHECK_INTERVAL=60
 ```
 
 ## Uninstall
