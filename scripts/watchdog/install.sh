@@ -97,6 +97,7 @@ Environment=MCWEBUI_DIR=${MCWEBUI_DIR}
 Environment=CHECK_INTERVAL=30
 Environment=LOG_FILE=${LOG_FILE}
 Environment=HTTP_PORT=5051
+Environment=AUTO_START=true
 ExecStart=/usr/bin/python3 -u ${SCRIPT_DIR}/watchdog.py
 Restart=always
 RestartSec=10

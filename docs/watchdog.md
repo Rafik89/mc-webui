@@ -1,11 +1,12 @@
 # Container Watchdog
 
-The Container Watchdog is a systemd service that monitors Docker containers and automatically restarts unhealthy ones. This is useful for ensuring reliability, especially on resource-constrained systems.
+The Container Watchdog is a systemd service that monitors Docker containers and automatically restarts unhealthy or stopped ones. This is useful for ensuring reliability, especially on resource-constrained systems.
 
 ## Features
 
 - **Health monitoring** - Checks container status every 30 seconds
 - **Automatic restart** - Restarts containers that become unhealthy
+- **Auto-start stopped containers** - Starts containers that have stopped (configurable)
 - **Diagnostic logging** - Captures container logs before restart for troubleshooting
 - **HTTP status endpoint** - Query container status via HTTP API
 - **Restart history** - Tracks all automatic restarts with timestamps
@@ -80,6 +81,7 @@ If you need to customize the behavior, the service supports these environment va
 | `CHECK_INTERVAL` | `30` | Seconds between health checks |
 | `LOG_FILE` | `/var/log/mc-webui-watchdog.log` | Path to log file |
 | `HTTP_PORT` | `5051` | HTTP status port (0 to disable) |
+| `AUTO_START` | `true` | Start stopped containers (set to `false` to disable) |
 
 To modify defaults, create an override file:
 ```bash
@@ -90,6 +92,7 @@ Then add your overrides, for example:
 ```ini
 [Service]
 Environment=CHECK_INTERVAL=60
+Environment=AUTO_START=false
 ```
 
 ## Uninstall

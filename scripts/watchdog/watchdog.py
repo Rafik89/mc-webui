@@ -7,6 +7,7 @@ Designed to run as a systemd service on the host.
 
 Features:
 - Monitors container health status
+- Automatically starts stopped containers (configurable)
 - Captures logs before restart for diagnostics
 - Logs all events to file
 - HTTP endpoint for status check
@@ -16,6 +17,7 @@ Configuration via environment variables:
 - CHECK_INTERVAL: Seconds between checks (default: 30)
 - LOG_FILE: Path to log file (default: /var/log/mc-webui-watchdog.log)
 - HTTP_PORT: Port for status endpoint (default: 5051, 0 to disable)
+- AUTO_START: Start stopped containers (default: true, set to 'false' to disable)
 """
 
 import os
@@ -33,6 +35,7 @@ MCWEBUI_DIR = os.environ.get('MCWEBUI_DIR', os.path.expanduser('~/mc-webui'))
 CHECK_INTERVAL = int(os.environ.get('CHECK_INTERVAL', '30'))
 LOG_FILE = os.environ.get('LOG_FILE', '/var/log/mc-webui-watchdog.log')
 HTTP_PORT = int(os.environ.get('HTTP_PORT', '5051'))
+AUTO_START = os.environ.get('AUTO_START', 'true').lower() != 'false'
 
 # Containers to monitor
 CONTAINERS = ['meshcore-bridge', 'mc-webui']
@@ -150,6 +153,45 @@ def restart_container(container_name: str) -> bool:
         return False
 
 
+def start_container(container_name: str) -> bool:
+    """Start a stopped container using docker compose."""
+    log(f"Starting container: {container_name}", 'WARN')
+
+    success, stdout, stderr = run_compose_command([
+        'start', container_name
+    ], timeout=120)
+
+    if success:
+        log(f"Container {container_name} started successfully")
+        return True
+    else:
+        log(f"Failed to start {container_name}: {stderr}", 'ERROR')
+        return False
+
+
+def handle_stopped_container(container_name: str, status: dict):
+    """Handle a stopped container - log and start it."""
+    global restart_history
+
+    log(f"Container {container_name} is stopped! Status: {status['status']}", 'WARN')
+
+    # Start the container
+    start_success = start_container(container_name)
+
+    # Record in history
+    restart_history.append({
+        'timestamp': datetime.now().isoformat(),
+        'container': container_name,
+        'action': 'start',
+        'status_before': status,
+        'success': start_success
+    })
+
+    # Keep only last 50 entries
+    if len(restart_history) > 50:
+        restart_history = restart_history[-50:]
+
+
 def handle_unhealthy_container(container_name: str, status: dict):
     """Handle an unhealthy container - log details and restart."""
     global restart_history
@@ -206,7 +248,10 @@ def check_containers():
         if not status['exists']:
             log(f"Container {container_name} not found", 'WARN')
         elif status['status'] != 'running':
-            log(f"Container {container_name} is not running (status: {status['status']})", 'WARN')
+            if AUTO_START:
+                handle_stopped_container(container_name, status)
+            else:
+                log(f"Container {container_name} is not running (status: {status['status']}), AUTO_START disabled", 'WARN')
         elif status['health'] == 'unhealthy':
             handle_unhealthy_container(container_name, status)
 
@@ -273,6 +318,7 @@ def main():
     log(f"  Check interval: {CHECK_INTERVAL}s")
     log(f"  Log file: {LOG_FILE}")
     log(f"  HTTP port: {HTTP_PORT if HTTP_PORT > 0 else 'disabled'}")
+    log(f"  Auto-start stopped containers: {AUTO_START}")
     log(f"  Monitoring containers: {', '.join(CONTAINERS)}")
     log("=" * 60)
 
