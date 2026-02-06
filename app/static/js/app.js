@@ -728,6 +728,7 @@ function createMessageElement(msg) {
         wrapper.innerHTML = `
             <div class="message-container">
                 <div class="message-footer own">
+                    <span class="message-sender own">${escapeHtml(msg.sender)}</span>
                     <span class="message-time">${time}</span>
                 </div>
                 <div class="message own">

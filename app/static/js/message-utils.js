@@ -11,6 +11,9 @@
 function processMessageContent(content) {
     if (!content) return '';
 
+    // Check if content (minus mentions) is emoji-only BEFORE any processing
+    const emojiOnlyInfo = checkEmojiOnlyContent(content);
+
     // First escape HTML to prevent XSS
     let processed = escapeHtml(content);
 
@@ -27,7 +30,56 @@ function processMessageContent(content) {
     // 4. Convert URLs to links (and images to thumbnails)
     processed = processUrls(processed);
 
+    // 5. If emoji-only, enlarge the emoji
+    if (emojiOnlyInfo.isEmojiOnly) {
+        processed = enlargeEmoji(processed, emojiOnlyInfo.hasMention);
+    }
+
     return processed;
+}
+
+/**
+ * Check if content is emoji-only (excluding @[mentions])
+ * @param {string} text - Raw message content
+ * @returns {object} - { isEmojiOnly: boolean, hasMention: boolean }
+ */
+function checkEmojiOnlyContent(text) {
+    const hasMention = /@\[[^\]]+\]/.test(text);
+
+    // Remove @[...] patterns
+    const withoutMentions = text.replace(/@\[[^\]]+\]/g, '').trim();
+
+    if (!withoutMentions) {
+        return { isEmojiOnly: false, hasMention };
+    }
+
+    // Check if remaining is only emoji (using Unicode Extended_Pictographic)
+    // Matches emoji, modifiers, skin tones, ZWJ sequences, variation selectors, and whitespace
+    const emojiRegex = /^[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\uFE0F\u200D\s]+$/u;
+    const isEmojiOnly = emojiRegex.test(withoutMentions);
+
+    return { isEmojiOnly, hasMention };
+}
+
+/**
+ * Enlarge emoji in processed HTML
+ * @param {string} html - Processed HTML with mention badges
+ * @param {boolean} hasMention - Whether content has mentions
+ * @returns {string} - HTML with enlarged emoji
+ */
+function enlargeEmoji(html, hasMention) {
+    if (hasMention) {
+        // Add line break after mention badge, then wrap emoji in large class
+        // Pattern: closing </span> of mention badge, optional whitespace, then emoji
+        html = html.replace(
+            /(<\/span>)\s*([\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Emoji_Modifier_Base}\p{Emoji_Component}\uFE0F\u200D\s]+)$/u,
+            '$1<br><span class="emoji-large">$2</span>'
+        );
+    } else {
+        // Just wrap everything in large emoji class
+        html = `<span class="emoji-large">${html}</span>`;
+    }
+    return html;
 }
 
 /**
@@ -77,8 +129,8 @@ function processChannelLinks(text) {
  * @returns {string} - Text with styled quotes
  */
 function processQuotes(text) {
-    // Match »...« pattern (guillemets)
-    const quotePattern = /»([^«]+)«/g;
+    // Match »...« pattern (guillemets) including optional trailing whitespace
+    const quotePattern = /»([^«]+)«\s*/g;
 
     return text.replace(quotePattern, (_match, quoted) => {
         // Display without guillemets (styling is enough) + line break after
