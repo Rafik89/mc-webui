@@ -149,7 +149,12 @@ class MeshCLISession:
         # Echo tracking for "Heard X repeats" feature
         self.pending_echo = None  # {timestamp, channel_idx, pkt_payload}
         self.echo_counts = {}     # pkt_payload -> {paths: set(), timestamp: float, channel_idx: int}
+        self.incoming_paths = {}  # pkt_payload -> {path, snr, path_len, timestamp}
         self.echo_lock = threading.Lock()
+        self.echo_log_path = self.config_dir / f"{device_name}.echoes.jsonl"
+
+        # Load persisted echo data from disk
+        self._load_echoes()
 
         # Start session
         self._start_session()
@@ -316,7 +321,7 @@ class MeshCLISession:
                 # Try to parse as GRP_TXT echo (for "Heard X repeats" feature)
                 echo_data = self._parse_grp_txt_echo(line)
                 if echo_data:
-                    self._process_echo(echo_data[0], echo_data[1])
+                    self._process_echo(echo_data)
                     continue
 
                 # Otherwise, append to current CLI response
@@ -483,30 +488,43 @@ class MeshCLISession:
             return False
 
     def _parse_grp_txt_echo(self, line):
-        """Parse GRP_TXT JSON echo, return (pkt_payload, path) or None."""
+        """Parse GRP_TXT JSON echo, return data dict or None."""
         try:
             data = json.loads(line)
             if isinstance(data, dict) and data.get("payload_typename") == "GRP_TXT":
-                return (data.get('pkt_payload'), data.get('path', ''))
+                return {
+                    'pkt_payload': data.get('pkt_payload'),
+                    'path': data.get('path', ''),
+                    'snr': data.get('snr'),
+                    'path_len': data.get('path_len'),
+                }
         except (json.JSONDecodeError, ValueError):
             pass
         return None
 
-    def _process_echo(self, pkt_payload, path):
-        """Process a GRP_TXT echo and track unique paths."""
+    def _process_echo(self, echo_data):
+        """Process a GRP_TXT echo: track as sent echo or incoming path."""
+        pkt_payload = echo_data.get('pkt_payload')
+        path = echo_data.get('path', '')
         if not pkt_payload:
             return
 
         with self.echo_lock:
             current_time = time.time()
 
-            # If this pkt_payload is already tracked, add path
+            # If this pkt_payload is already tracked as sent echo, add path
             if pkt_payload in self.echo_counts:
-                self.echo_counts[pkt_payload]['paths'].add(path)
+                if path not in self.echo_counts[pkt_payload]['paths']:
+                    self.echo_counts[pkt_payload]['paths'].add(path)
+                    self._save_echo({
+                        'type': 'sent_echo', 'pkt_payload': pkt_payload,
+                        'path': path, 'msg_ts': self.echo_counts[pkt_payload]['timestamp'],
+                        'channel_idx': self.echo_counts[pkt_payload]['channel_idx']
+                    })
                 logger.debug(f"Echo: added path {path} to existing payload, total: {len(self.echo_counts[pkt_payload]['paths'])}")
                 return
 
-            # If we have a pending message waiting for correlation
+            # If we have a pending sent message waiting for correlation
             if self.pending_echo and self.pending_echo.get('pkt_payload') is None:
                 # Check time window (60 seconds)
                 if current_time - self.pending_echo['timestamp'] < 60:
@@ -517,7 +535,32 @@ class MeshCLISession:
                         'timestamp': self.pending_echo['timestamp'],
                         'channel_idx': self.pending_echo['channel_idx']
                     }
+                    self._save_echo({
+                        'type': 'sent_echo', 'pkt_payload': pkt_payload,
+                        'path': path, 'msg_ts': self.pending_echo['timestamp'],
+                        'channel_idx': self.pending_echo['channel_idx']
+                    })
                     logger.info(f"Echo: correlated pkt_payload with sent message, first path: {path}")
+                    return
+
+            # Not a sent echo -> store as incoming message path
+            self.incoming_paths[pkt_payload] = {
+                'path': path,
+                'snr': echo_data.get('snr'),
+                'path_len': echo_data.get('path_len'),
+                'timestamp': current_time,
+            }
+            self._save_echo({
+                'type': 'rx_echo', 'pkt_payload': pkt_payload,
+                'path': path, 'snr': echo_data.get('snr'),
+                'path_len': echo_data.get('path_len')
+            })
+            logger.debug(f"Echo: stored incoming path {path} (path_len={echo_data.get('path_len')})")
+
+            # Cleanup old incoming paths (> 1 hour)
+            cutoff = current_time - 3600
+            self.incoming_paths = {k: v for k, v in self.incoming_paths.items()
+                                   if v['timestamp'] > cutoff}
 
     def register_pending_echo(self, channel_idx, timestamp):
         """Register a sent message for echo tracking."""
@@ -542,6 +585,80 @@ class MeshCLISession:
                     data['channel_idx'] == channel_idx):
                     return len(data['paths'])
         return 0
+
+    def _save_echo(self, record):
+        """Append echo record to .echoes.jsonl file."""
+        try:
+            record['ts'] = time.time()
+            with open(self.echo_log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        except Exception as e:
+            logger.error(f"Failed to save echo: {e}")
+
+    def _load_echoes(self):
+        """Load echo data from .echoes.jsonl on startup."""
+        if not self.echo_log_path.exists():
+            return
+
+        cutoff = time.time() - (7 * 24 * 3600)  # 7 days
+        kept_lines = []
+        loaded_sent = 0
+        loaded_incoming = 0
+
+        try:
+            with open(self.echo_log_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    ts = record.get('ts', 0)
+                    if ts < cutoff:
+                        continue  # Skip old records
+
+                    kept_lines.append(line)
+                    pkt_payload = record.get('pkt_payload')
+                    if not pkt_payload:
+                        continue
+
+                    echo_type = record.get('type')
+
+                    if echo_type == 'sent_echo':
+                        if pkt_payload in self.echo_counts:
+                            # Add path to existing entry
+                            path = record.get('path', '')
+                            if path:
+                                self.echo_counts[pkt_payload]['paths'].add(path)
+                        else:
+                            self.echo_counts[pkt_payload] = {
+                                'paths': {record.get('path', '')},
+                                'timestamp': record.get('msg_ts', ts),
+                                'channel_idx': record.get('channel_idx', 0)
+                            }
+                            loaded_sent += 1
+
+                    elif echo_type == 'rx_echo':
+                        self.incoming_paths[pkt_payload] = {
+                            'path': record.get('path', ''),
+                            'snr': record.get('snr'),
+                            'path_len': record.get('path_len'),
+                            'timestamp': ts,
+                        }
+                        loaded_incoming += 1
+
+            # Rewrite file with only recent records (compact)
+            with open(self.echo_log_path, 'w', encoding='utf-8') as f:
+                for line in kept_lines:
+                    f.write(line + '\n')
+
+            logger.info(f"Loaded echoes from disk: {loaded_sent} sent, {loaded_incoming} incoming (kept {len(kept_lines)} records)")
+
+        except Exception as e:
+            logger.error(f"Failed to load echoes: {e}")
 
     def _log_advert(self, json_line):
         """Log advert JSON to .jsonl file with timestamp"""
@@ -1127,16 +1244,20 @@ def register_echo():
 @app.route('/echo_counts', methods=['GET'])
 def get_echo_counts():
     """
-    Get all echo counts for recent messages.
+    Get echo data for sent and incoming messages.
 
-    Returns echo counts grouped by timestamp and channel, allowing
-    the caller to match with their sent messages.
+    Returns sent echo counts (with repeater paths) and incoming message
+    path info, allowing the caller to match with displayed messages.
 
     Response JSON:
         {
             "success": true,
             "echo_counts": [
-                {"timestamp": 1706500000.123, "channel_idx": 0, "count": 3},
+                {"timestamp": 1706500000.123, "channel_idx": 0, "count": 3, "paths": ["5e", "d1", "a3"]},
+                ...
+            ],
+            "incoming_paths": [
+                {"timestamp": 1706500000.456, "path": "8a40a605", "path_len": 4, "snr": 11.0},
                 ...
             ]
         }
@@ -1145,15 +1266,29 @@ def get_echo_counts():
         return jsonify({'success': False, 'error': 'Not initialized'}), 503
 
     with meshcli_session.echo_lock:
-        result = []
+        sent = []
         for pkt_payload, data in meshcli_session.echo_counts.items():
-            result.append({
+            sent.append({
                 'timestamp': data['timestamp'],
                 'channel_idx': data['channel_idx'],
-                'count': len(data['paths'])
+                'count': len(data['paths']),
+                'paths': list(data['paths'])
             })
 
-    return jsonify({'success': True, 'echo_counts': result}), 200
+        incoming = []
+        for pkt_payload, data in meshcli_session.incoming_paths.items():
+            incoming.append({
+                'timestamp': data['timestamp'],
+                'path': data['path'],
+                'path_len': data.get('path_len'),
+                'snr': data.get('snr'),
+            })
+
+    return jsonify({
+        'success': True,
+        'echo_counts': sent,
+        'incoming_paths': incoming
+    }), 200
 
 
 # =============================================================================

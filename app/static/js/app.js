@@ -715,13 +715,23 @@ function createMessageElement(msg) {
     if (msg.path_len !== undefined && msg.path_len !== null) {
         metaInfo += ` | Hops: ${msg.path_len}`;
     }
+    if (msg.path) {
+        const segments = msg.path.match(/.{1,2}/g) || [];
+        const fullPath = segments.join(' \u2192 ');
+        const shortPath = segments.length > 4
+            ? `${segments[0]}\u2192...\u2192${segments[segments.length - 1]}`
+            : segments.join('\u2192');
+        metaInfo += ` | <span class="path-info" title="Path: ${fullPath}">Route: ${shortPath}</span>`;
+    }
 
     if (msg.is_own) {
         // Own messages: right-aligned, no avatar
-        // Echo badge shows how many repeaters heard the message
+        // Echo badge shows how many repeaters heard the message + their path codes
+        const echoPaths = (msg.echo_paths || []).map(p => p.substring(0, 2));
+        const pathDisplay = echoPaths.length > 0 ? ` (${echoPaths.join(', ')})` : '';
         const echoDisplay = msg.echo_count > 0
-            ? `<span class="echo-badge" title="Heard by ${msg.echo_count} repeater(s)">
-                 <i class="bi bi-broadcast"></i> ${msg.echo_count}
+            ? `<span class="echo-badge" title="Heard by ${msg.echo_count} repeater(s): ${echoPaths.join(', ')}">
+                 <i class="bi bi-broadcast"></i> ${msg.echo_count}${pathDisplay}
                </span>`
             : '';
 

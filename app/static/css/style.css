@@ -1121,6 +1121,12 @@ main {
     background-color: rgba(117, 183, 152, 0.15);
 }
 
+/* Path info in message meta (incoming messages) */
+.path-info {
+    cursor: help;
+    border-bottom: 1px dotted currentColor;
+}
+
 /* =============================================================================
    Chat Filter
    ============================================================================= */

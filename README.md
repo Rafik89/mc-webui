@@ -22,7 +22,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - **Message archives** - Automatic daily archiving with browse-by-date selector
 - **Interactive Console** - Direct meshcli command execution via WebSocket
 - **@Mentions autocomplete** - Type @ to see contact suggestions with fuzzy search
-- **Echo tracking** - "Heard X repeats" badge shows how many repeaters forwarded your message
+- **Echo tracking** - "Heard X repeats" with repeater IDs for sent messages, route path for incoming messages (persisted across restarts)
 - **PWA support** - Browser notifications and installable app (experimental)
 - **Full offline support** - Works without internet (local Bootstrap, icons, emoji picker)
 

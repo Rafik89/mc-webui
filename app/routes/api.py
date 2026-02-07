@@ -299,29 +299,38 @@ def get_messages():
             channel_idx=channel_idx
         )
 
-        # Fetch echo counts from bridge (for "Heard X repeats" feature)
+        # Fetch echo data from bridge (for "Heard X repeats" + path display)
         if not archive_date:  # Only for live messages, not archives
             try:
                 bridge_url = config.MC_BRIDGE_URL.replace('/cli', '/echo_counts')
                 response = requests.get(bridge_url, timeout=2)
                 if response.ok:
-                    echo_counts = response.json().get('echo_counts', [])
+                    resp_data = response.json()
+                    echo_counts = resp_data.get('echo_counts', [])
+                    incoming_paths = resp_data.get('incoming_paths', [])
 
-                    # Create lookup by timestamp + channel
-                    echo_lookup = {(ec['timestamp'], ec['channel_idx']): ec['count']
-                                   for ec in echo_counts}
-
-                    # Merge into messages
+                    # Merge sent echo counts + paths into own messages
                     for msg in messages:
                         if msg.get('is_own'):
-                            # Find matching echo count (within 5 second window)
                             msg['echo_count'] = 0
-                            for (ts, ch), count in echo_lookup.items():
-                                if msg.get('channel_idx') == ch and abs(msg['timestamp'] - ts) < 5:
-                                    msg['echo_count'] = count
+                            msg['echo_paths'] = []
+                            for ec in echo_counts:
+                                if (msg.get('channel_idx') == ec.get('channel_idx') and
+                                        abs(msg['timestamp'] - ec['timestamp']) < 5):
+                                    msg['echo_count'] = ec['count']
+                                    msg['echo_paths'] = ec.get('paths', [])
+                                    break
+
+                    # Merge incoming paths into received messages
+                    for msg in messages:
+                        if not msg.get('is_own'):
+                            for ip in incoming_paths:
+                                if (abs(msg['timestamp'] - ip['timestamp']) < 5 and
+                                        msg.get('path_len') == ip.get('path_len')):
+                                    msg['path'] = ip['path']
                                     break
             except Exception as e:
-                logger.debug(f"Echo counts fetch failed (non-critical): {e}")
+                logger.debug(f"Echo data fetch failed (non-critical): {e}")
 
         return jsonify({
             'success': True,
