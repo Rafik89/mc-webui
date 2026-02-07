@@ -721,7 +721,7 @@ function createMessageElement(msg) {
         const shortPath = segments.length > 4
             ? `${segments[0]}\u2192...\u2192${segments[segments.length - 1]}`
             : segments.join('\u2192');
-        metaInfo += ` | <span class="path-info" title="Path: ${fullPath}">Route: ${shortPath}</span>`;
+        metaInfo += ` | <span class="path-info" onclick="showPathPopup(this, '${fullPath}')">Route: ${shortPath}</span>`;
     }
 
     if (msg.is_own) {
@@ -895,6 +895,31 @@ function resendMessage(content) {
     input.value = content;
     updateCharCounter();
     input.focus();
+}
+
+/**
+ * Show path popup on tap (mobile-friendly alternative to tooltip)
+ */
+function showPathPopup(element, fullPath) {
+    // Remove any existing popup
+    const existing = document.querySelector('.path-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.className = 'path-popup';
+    popup.textContent = `Path: ${fullPath}`;
+    element.style.position = 'relative';
+    element.appendChild(popup);
+
+    // Auto-dismiss after 4 seconds or on outside tap
+    const dismiss = () => popup.remove();
+    setTimeout(dismiss, 4000);
+    document.addEventListener('click', function handler(e) {
+        if (!element.contains(e.target)) {
+            dismiss();
+            document.removeEventListener('click', handler);
+        }
+    });
 }
 
 /**
