@@ -5,16 +5,16 @@ meshcore-cli compatibility checker for mc-webui
 Tests all meshcli commands and response formats used by mc-webui
 against the currently running meshcore-bridge instance.
 
-Usage:
-    # From inside mc-webui container (recommended):
-    docker compose exec mc-webui python /app/scripts/check_compat.py
+Usage (from host, piped into mc-webui container):
+    cd ~/mc-webui
+    cat scripts/check_compat.py | docker compose exec -T mc-webui python -
 
-    # From host (requires requests):
-    python scripts/check_compat.py --bridge-url http://localhost:5001
+    # Full mode (includes advert test):
+    cat scripts/check_compat.py | docker compose exec -T mc-webui env FULL=1 python -
 """
 
-import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -511,22 +511,34 @@ class CompatChecker:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Check meshcore-cli compatibility with mc-webui"
-    )
-    parser.add_argument(
-        "--bridge-url",
-        default=DEFAULT_BRIDGE_URL,
-        help=f"Bridge URL (default: {DEFAULT_BRIDGE_URL})"
-    )
-    parser.add_argument(
-        "--full",
-        action="store_true",
-        help="Run all tests including those with network side-effects (advert)"
-    )
-    args = parser.parse_args()
+    bridge_url = os.environ.get("BRIDGE_URL", DEFAULT_BRIDGE_URL)
+    full_mode = os.environ.get("FULL", "").lower() in ("1", "true", "yes")
 
-    checker = CompatChecker(args.bridge_url, args.full)
+    # Support --bridge-url and --full from command line too
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--bridge-url" and i + 1 < len(args):
+            bridge_url = args[i + 1]
+            i += 2
+        elif args[i] == "--full":
+            full_mode = True
+            i += 1
+        elif args[i] in ("-h", "--help"):
+            print("Usage: check_compat.py [--bridge-url URL] [--full]")
+            print(f"  --bridge-url  Bridge URL (default: {DEFAULT_BRIDGE_URL})")
+            print(f"                Or set BRIDGE_URL env var")
+            print(f"  --full        Include tests with network side-effects")
+            print(f"                Or set FULL=1 env var")
+            print()
+            print("Run from host:")
+            print("  cat scripts/check_compat.py | docker compose exec -T mc-webui python -")
+            print("  cat scripts/check_compat.py | docker compose exec -T mc-webui env FULL=1 python -")
+            sys.exit(0)
+        else:
+            i += 1
+
+    checker = CompatChecker(bridge_url, full_mode)
     sys.exit(checker.run_all())
 
 
