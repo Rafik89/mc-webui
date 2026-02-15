@@ -155,7 +155,8 @@ class CompatChecker:
             for line in stdout.split('\n'):
                 line_stripped = line.strip()
                 if not line_stripped or line_stripped.startswith('---') or \
-                   line.lower().startswith('contact') or line.startswith('INFO:'):
+                   line.lower().startswith('contact') or line.startswith('INFO:') or \
+                   self._is_prompt_line(line_stripped):
                     continue
 
                 parts = CONTACTS_SPLIT_REGEX.split(line)
@@ -291,7 +292,7 @@ class CompatChecker:
             unparsed = []
             for line in stdout.split('\n'):
                 line = line.strip()
-                if not line:
+                if not line or self._is_prompt_line(line):
                     continue
                 match = CHANNEL_REGEX.match(line)
                 if match:
@@ -408,6 +409,17 @@ class CompatChecker:
             self.add(self.ERROR, cat, str(e))
 
     # ── Helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_prompt_line(line):
+        """Check if line is a meshcli prompt or summary (not actual data)."""
+        # Prompt lines: "DeviceName|* command" or "DeviceName|*"
+        if '|*' in line:
+            return True
+        # Summary lines: "> 310 contacts in device"
+        if line.startswith('>'):
+            return True
+        return False
 
     def _extract_json_object(self, text):
         """Extract first complete JSON object from text using brace-matching."""
