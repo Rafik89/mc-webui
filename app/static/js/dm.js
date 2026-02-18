@@ -515,8 +515,11 @@ async function sendMessage() {
             updateCharCounter();
             showNotification('Message sent', 'success');
 
-            // Reload messages after short delay
+            // Reload messages after short delay to show sent message
             setTimeout(() => loadMessages(), 1000);
+            // Reload again to catch ACK delivery status (typically arrives within 3-30s)
+            setTimeout(() => loadMessages(), 6000);
+            setTimeout(() => loadMessages(), 15000);
         } else {
             showNotification('Failed to send: ' + data.error, 'danger');
         }
