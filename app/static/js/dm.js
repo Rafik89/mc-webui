@@ -515,11 +515,22 @@ async function sendMessage() {
             updateCharCounter();
             showNotification('Message sent', 'success');
 
-            // Reload messages after short delay to show sent message
-            setTimeout(() => loadMessages(), 1000);
-            // Reload again to catch ACK delivery status (typically arrives within 3-30s)
-            setTimeout(() => loadMessages(), 6000);
-            setTimeout(() => loadMessages(), 15000);
+            // Reload messages to show sent message + ACK delivery status
+            // Stop early once the last own message gets a delivery checkmark
+            const ackRefreshDelays = [1000, 6000, 15000];
+            let ackRefreshIdx = 0;
+            const scheduleAckRefresh = () => {
+                if (ackRefreshIdx >= ackRefreshDelays.length) return;
+                const delay = ackRefreshDelays[ackRefreshIdx++];
+                setTimeout(async () => {
+                    await loadMessages();
+                    const ownMsgs = document.querySelectorAll('#dmMessagesList .dm-message.own');
+                    const lastOwn = ownMsgs.length > 0 ? ownMsgs[ownMsgs.length - 1] : null;
+                    const delivered = lastOwn && lastOwn.querySelector('.dm-status.delivered');
+                    if (!delivered) scheduleAckRefresh();
+                }, delay);
+            };
+            scheduleAckRefresh();
         } else {
             showNotification('Failed to send: ' + data.error, 'danger');
         }
