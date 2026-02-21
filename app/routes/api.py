@@ -3,12 +3,15 @@ REST API endpoints for mc-webui
 """
 
 import hashlib
+import hmac as hmac_mod
 import logging
 import json
 import re
 import base64
+import struct
 import time
 import requests
+from Crypto.Cipher import AES
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -46,6 +49,29 @@ def compute_analyzer_url(pkt_payload):
         return f"{ANALYZER_BASE_URL}{packet_hash}"
     except (ValueError, TypeError):
         return None
+
+
+def compute_pkt_payload(channel_secret_hex, sender_timestamp, txt_type, text, attempt=0):
+    """Compute pkt_payload from message data + channel secret.
+
+    Reconstructs the encrypted GRP_TXT payload:
+      channel_hash(1) + HMAC-MAC(2) + AES-128-ECB(plaintext)
+    where plaintext = timestamp(4 LE) + flags(1) + text(UTF-8) + null + zero-pad.
+    """
+    secret = bytes.fromhex(channel_secret_hex)
+    flags = ((txt_type & 0x3F) << 2) | (attempt & 0x03)
+    plaintext = struct.pack('<I', sender_timestamp) + bytes([flags]) + text.encode('utf-8') + b'\x00'
+    # Pad to AES block boundary (16 bytes)
+    pad_len = (16 - len(plaintext) % 16) % 16
+    plaintext += b'\x00' * pad_len
+    # AES-128-ECB encrypt
+    cipher = AES.new(secret[:16], AES.MODE_ECB)
+    ciphertext = cipher.encrypt(plaintext)
+    # HMAC-SHA256 truncated to 2 bytes
+    mac = hmac_mod.new(secret, ciphertext, hashlib.sha256).digest()[:2]
+    # Channel hash: first byte of SHA256(secret)
+    chan_hash = hashlib.sha256(secret).digest()[0:1]
+    return (chan_hash + mac + ciphertext).hex()
 
 
 def get_channels_cached(force_refresh=False):
@@ -342,27 +368,29 @@ def get_messages():
                                     break
 
                     # Merge incoming paths into received messages
-                    # Match by timestamp proximity + path_len confirmation
+                    # Deterministic matching via computed pkt_payload
+                    incoming_by_payload = {ip['pkt_payload']: ip for ip in incoming_paths}
+
+                    # Get channel secrets for payload computation
+                    _, channels = get_channels_cached()
+                    channel_secrets = {ch['index']: ch['key'] for ch in (channels or [])}
+
                     for msg in messages:
-                        if not msg.get('is_own'):
-                            best_match = None
-                            best_delta = 10  # max 10 second window
-                            for ip in incoming_paths:
-                                delta = abs(msg['timestamp'] - ip['timestamp'])
-                                if delta < best_delta:
-                                    # Prefer matches where path_len also matches
-                                    if msg.get('path_len') == ip.get('path_len'):
-                                        best_match = ip
-                                        best_delta = delta
-                                    elif best_match is None:
-                                        # Fallback: timestamp-only match
-                                        best_match = ip
-                                        best_delta = delta
-                            if best_match:
-                                msg['path'] = best_match['path']
-                                pkt = best_match.get('pkt_payload')
-                                if pkt:
-                                    msg['analyzer_url'] = compute_analyzer_url(pkt)
+                        if not msg.get('is_own') and msg.get('sender_timestamp') and msg.get('channel_idx') in channel_secrets:
+                            secret = channel_secrets[msg['channel_idx']]
+                            for attempt in range(4):
+                                try:
+                                    payload = compute_pkt_payload(
+                                        secret, msg['sender_timestamp'],
+                                        msg.get('txt_type', 0), msg.get('raw_text', ''), attempt
+                                    )
+                                except Exception:
+                                    break
+                                if payload in incoming_by_payload:
+                                    entry = incoming_by_payload[payload]
+                                    msg['paths'] = entry.get('paths', [])
+                                    msg['analyzer_url'] = compute_analyzer_url(payload)
+                                    break
             except Exception as e:
                 logger.debug(f"Echo data fetch failed (non-critical): {e}")
 

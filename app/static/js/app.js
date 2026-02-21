@@ -715,13 +715,16 @@ function createMessageElement(msg) {
     if (msg.path_len !== undefined && msg.path_len !== null) {
         metaInfo += ` | Hops: ${msg.path_len}`;
     }
-    if (msg.path) {
-        const segments = msg.path.match(/.{1,2}/g) || [];
-        const fullPath = segments.join(' \u2192 ');
+    if (msg.paths && msg.paths.length > 0) {
+        // Show first path inline (shortest/first arrival)
+        const firstPath = msg.paths[0];
+        const segments = firstPath.path ? firstPath.path.match(/.{1,2}/g) || [] : [];
         const shortPath = segments.length > 4
             ? `${segments[0]}\u2192...\u2192${segments[segments.length - 1]}`
             : segments.join('\u2192');
-        metaInfo += ` | <span class="path-info" onclick="showPathPopup(this, '${fullPath}')">Route: ${shortPath}</span>`;
+        const pathsData = encodeURIComponent(JSON.stringify(msg.paths));
+        const routeLabel = msg.paths.length > 1 ? `Route (${msg.paths.length})` : 'Route';
+        metaInfo += ` | <span class="path-info" onclick="showPathsPopup(this, '${pathsData}')">${routeLabel}: ${shortPath}</span>`;
     }
 
     if (msg.is_own) {
@@ -908,22 +911,34 @@ function resendMessage(content) {
 }
 
 /**
- * Show path popup on tap (mobile-friendly alternative to tooltip)
+ * Show paths popup on tap (mobile-friendly, shows all routes)
  */
-function showPathPopup(element, fullPath) {
+function showPathsPopup(element, encodedPaths) {
     // Remove any existing popup
     const existing = document.querySelector('.path-popup');
     if (existing) existing.remove();
 
+    const paths = JSON.parse(decodeURIComponent(encodedPaths));
+
     const popup = document.createElement('div');
     popup.className = 'path-popup';
-    popup.textContent = `Path: ${fullPath}`;
+
+    let html = '';
+    paths.forEach((p, i) => {
+        const segments = p.path ? p.path.match(/.{1,2}/g) || [] : [];
+        const fullRoute = segments.join(' \u2192 ');
+        const snr = p.snr !== null && p.snr !== undefined ? `${p.snr.toFixed(1)} dB` : '?';
+        const hops = p.path_len !== null && p.path_len !== undefined ? p.path_len : segments.length;
+        html += `<div class="path-entry">${fullRoute}<span class="path-detail">SNR: ${snr} | Hops: ${hops}</span></div>`;
+    });
+
+    popup.innerHTML = html;
     element.style.position = 'relative';
     element.appendChild(popup);
 
-    // Auto-dismiss after 4 seconds or on outside tap
+    // Auto-dismiss after 8 seconds or on outside tap
     const dismiss = () => popup.remove();
-    setTimeout(dismiss, 4000);
+    setTimeout(dismiss, 8000);
     document.addEventListener('click', function handler(e) {
         if (!element.contains(e.target)) {
             dismiss();

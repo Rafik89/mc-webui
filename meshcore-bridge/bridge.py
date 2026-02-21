@@ -580,24 +580,29 @@ class MeshCLISession:
                     logger.info(f"Echo: correlated pkt_payload with sent message, first path: {path}")
                     return
 
-            # Not a sent echo -> store as incoming message path
-            self.incoming_paths[pkt_payload] = {
+            # Not a sent echo -> accumulate as incoming message path
+            if pkt_payload not in self.incoming_paths:
+                self.incoming_paths[pkt_payload] = {
+                    'paths': [],
+                    'first_ts': current_time,
+                }
+            self.incoming_paths[pkt_payload]['paths'].append({
                 'path': path,
                 'snr': echo_data.get('snr'),
                 'path_len': echo_data.get('path_len'),
-                'timestamp': current_time,
-            }
+                'ts': current_time,
+            })
             self._save_echo({
                 'type': 'rx_echo', 'pkt_payload': pkt_payload,
                 'path': path, 'snr': echo_data.get('snr'),
                 'path_len': echo_data.get('path_len')
             })
-            logger.debug(f"Echo: stored incoming path {path} (path_len={echo_data.get('path_len')})")
+            logger.debug(f"Echo: stored incoming path {path} (path_len={echo_data.get('path_len')}, total paths: {len(self.incoming_paths[pkt_payload]['paths'])})")
 
             # Cleanup old incoming paths (> 1 hour)
             cutoff = current_time - 3600
             self.incoming_paths = {k: v for k, v in self.incoming_paths.items()
-                                   if v['timestamp'] > cutoff}
+                                   if v['first_ts'] > cutoff}
 
     def register_pending_echo(self, channel_idx, timestamp):
         """Register a sent message for echo tracking."""
@@ -679,13 +684,18 @@ class MeshCLISession:
                             loaded_sent += 1
 
                     elif echo_type == 'rx_echo':
-                        self.incoming_paths[pkt_payload] = {
+                        if pkt_payload not in self.incoming_paths:
+                            self.incoming_paths[pkt_payload] = {
+                                'paths': [],
+                                'first_ts': ts,
+                            }
+                            loaded_incoming += 1
+                        self.incoming_paths[pkt_payload]['paths'].append({
                             'path': record.get('path', ''),
                             'snr': record.get('snr'),
                             'path_len': record.get('path_len'),
-                            'timestamp': ts,
-                        }
-                        loaded_incoming += 1
+                            'ts': ts,
+                        })
 
             # Rewrite file with only recent records (compact)
             with open(self.echo_log_path, 'w', encoding='utf-8') as f:
@@ -1388,7 +1398,9 @@ def get_echo_counts():
                 ...
             ],
             "incoming_paths": [
-                {"timestamp": 1706500000.456, "path": "8a40a605", "path_len": 4, "snr": 11.0, "pkt_payload": "efgh..."},
+                {"pkt_payload": "efgh...", "timestamp": 1706500000.456, "paths": [
+                    {"path": "8a40a605", "path_len": 4, "snr": 11.0, "ts": 1706500000.456}, ...
+                ]},
                 ...
             ]
         }
@@ -1410,11 +1422,9 @@ def get_echo_counts():
         incoming = []
         for pkt_payload, data in meshcli_session.incoming_paths.items():
             incoming.append({
-                'timestamp': data['timestamp'],
-                'path': data['path'],
-                'path_len': data.get('path_len'),
-                'snr': data.get('snr'),
                 'pkt_payload': pkt_payload,
+                'timestamp': data['first_ts'],
+                'paths': data['paths'],
             })
 
     return jsonify({

@@ -22,7 +22,7 @@ A lightweight web interface for meshcore-cli, providing browser-based access to 
 - **Message archives** - Automatic daily archiving with browse-by-date selector
 - **Interactive Console** - Direct meshcli command execution via WebSocket
 - **@Mentions autocomplete** - Type @ to see contact suggestions with fuzzy search
-- **Echo tracking** - "Heard X repeats" with repeater IDs for sent messages, route path for incoming messages (persisted across restarts)
+- **Echo tracking** - "Heard X repeats" with repeater IDs for sent messages, all route paths for incoming messages with deterministic payload matching (persisted across restarts)
 - **MeshCore Analyzer** - View packet details on analyzer.letsmesh.net directly from channel messages
 - **DM delivery tracking** - ACK-based delivery confirmation with SNR and route info
 - **PWA support** - Browser notifications and installable app (experimental)

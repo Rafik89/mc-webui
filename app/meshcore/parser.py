@@ -69,7 +69,10 @@ def parse_message(line: Dict, allowed_channels: Optional[List[int]] = None) -> O
         'is_own': is_own,
         'snr': line.get('SNR'),
         'path_len': line.get('path_len'),
-        'channel_idx': channel_idx
+        'channel_idx': channel_idx,
+        'sender_timestamp': line.get('sender_timestamp'),
+        'txt_type': line.get('txt_type', 0),
+        'raw_text': text
     }
 
 

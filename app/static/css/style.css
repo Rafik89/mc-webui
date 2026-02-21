@@ -1152,22 +1152,39 @@ main {
     position: relative;
 }
 
-/* Path popup (mobile-friendly tooltip) */
+/* Path popup (mobile-friendly, multi-path) */
 .path-popup {
     position: absolute;
     bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     background-color: #333;
     color: #fff;
-    padding: 0.35rem 0.6rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 0.375rem;
     font-size: 0.7rem;
-    white-space: nowrap;
+    white-space: normal;
     z-index: 1000;
-    pointer-events: none;
+    pointer-events: auto;
     margin-bottom: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    min-width: 180px;
+    max-width: 320px;
+}
+
+.path-popup .path-entry {
+    padding: 0.15rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    word-break: break-all;
+}
+
+.path-popup .path-entry:last-child {
+    border-bottom: none;
+}
+
+.path-popup .path-detail {
+    display: block;
+    opacity: 0.7;
+    font-size: 0.6rem;
 }
 
 /* =============================================================================
