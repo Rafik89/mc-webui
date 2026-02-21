@@ -379,27 +379,30 @@ def get_messages():
                         if not msg.get('is_own') and msg.get('sender_timestamp') and msg.get('channel_idx') in channel_secrets:
                             secret = channel_secrets[msg['channel_idx']]
                             matched = False
+                            computed_payload = None
                             for attempt in range(4):
                                 try:
-                                    payload = compute_pkt_payload(
+                                    computed_payload = compute_pkt_payload(
                                         secret, msg['sender_timestamp'],
                                         msg.get('txt_type', 0), msg.get('raw_text', ''), attempt
                                     )
                                 except Exception:
                                     break
-                                if payload in incoming_by_payload:
-                                    entry = incoming_by_payload[payload]
+                                if computed_payload in incoming_by_payload:
+                                    entry = incoming_by_payload[computed_payload]
                                     msg['paths'] = entry.get('paths', [])
-                                    msg['analyzer_url'] = compute_analyzer_url(payload)
                                     matched = True
                                     break
+                            # Always set analyzer_url from computed payload (attempt 0)
+                            if computed_payload:
+                                msg['analyzer_url'] = compute_analyzer_url(computed_payload)
                             if not matched and incoming_by_payload:
                                 raw = msg.get('raw_text', '')
                                 logger.debug(
                                     f"Echo mismatch: ts={msg.get('sender_timestamp')} "
                                     f"ch={msg.get('channel_idx')} "
                                     f"text_bytes={len(raw.encode('utf-8'))} "
-                                    f"computed_payload={payload[:16]}... "
+                                    f"computed_payload={computed_payload[:16] if computed_payload else 'None'}... "
                                     f"text_preview={raw[:40]!r}"
                                 )
             except Exception as e:
