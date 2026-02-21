@@ -378,6 +378,7 @@ def get_messages():
                     for msg in messages:
                         if not msg.get('is_own') and msg.get('sender_timestamp') and msg.get('channel_idx') in channel_secrets:
                             secret = channel_secrets[msg['channel_idx']]
+                            matched = False
                             for attempt in range(4):
                                 try:
                                     payload = compute_pkt_payload(
@@ -390,7 +391,17 @@ def get_messages():
                                     entry = incoming_by_payload[payload]
                                     msg['paths'] = entry.get('paths', [])
                                     msg['analyzer_url'] = compute_analyzer_url(payload)
+                                    matched = True
                                     break
+                            if not matched and incoming_by_payload:
+                                raw = msg.get('raw_text', '')
+                                logger.debug(
+                                    f"Echo mismatch: ts={msg.get('sender_timestamp')} "
+                                    f"ch={msg.get('channel_idx')} "
+                                    f"text_bytes={len(raw.encode('utf-8'))} "
+                                    f"computed_payload={payload[:16]}... "
+                                    f"text_preview={raw[:40]!r}"
+                                )
             except Exception as e:
                 logger.debug(f"Echo data fetch failed (non-critical): {e}")
 

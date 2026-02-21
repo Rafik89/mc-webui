@@ -37,7 +37,8 @@ def parse_message(line: Dict, allowed_channels: Optional[List[int]] = None) -> O
         return None
 
     timestamp = line.get('timestamp', 0)
-    text = line.get('text', '').strip()
+    raw_text = line.get('text', '')
+    text = raw_text.strip()
 
     if not text:
         return None
@@ -72,7 +73,7 @@ def parse_message(line: Dict, allowed_channels: Optional[List[int]] = None) -> O
         'channel_idx': channel_idx,
         'sender_timestamp': line.get('sender_timestamp'),
         'txt_type': line.get('txt_type', 0),
-        'raw_text': text
+        'raw_text': raw_text
     }
 
 
