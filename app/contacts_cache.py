@@ -5,11 +5,13 @@ Stores every node name ever seen (from device contacts and adverts),
 so @mention autocomplete works even for removed contacts.
 
 File format: JSONL ({device_name}.contacts_cache.jsonl)
-Each line: {"public_key": "...", "name": "...", "first_seen": ts, "last_seen": ts, "source": "advert"|"device"}
+Each line: {"public_key": "...", "name": "...", "first_seen": ts, "last_seen": ts,
+            "source": "advert"|"device", "lat": float, "lon": float, "type_label": "CLI"|"REP"|...}
 """
 
 import json
 import logging
+import struct
 import time
 from pathlib import Path
 from threading import Lock
@@ -91,7 +93,8 @@ def save_cache() -> bool:
             return False
 
 
-def upsert_contact(public_key: str, name: str, source: str = "advert") -> bool:
+def upsert_contact(public_key: str, name: str, source: str = "advert",
+                   lat: float = 0.0, lon: float = 0.0, type_label: str = "") -> bool:
     """Add or update a contact in the cache. Returns True if cache was modified."""
     pk = public_key.lower()
     now = int(time.time())
@@ -103,18 +106,34 @@ def upsert_contact(public_key: str, name: str, source: str = "advert") -> bool:
             if name and name != existing.get('name'):
                 existing['name'] = name
                 changed = True
+            # Update lat/lon if new values are non-zero
+            if lat != 0.0 or lon != 0.0:
+                if lat != existing.get('lat') or lon != existing.get('lon'):
+                    existing['lat'] = lat
+                    existing['lon'] = lon
+                    changed = True
+            # Update type_label if provided and not already set
+            if type_label and type_label != existing.get('type_label'):
+                existing['type_label'] = type_label
+                changed = True
             existing['last_seen'] = now
             return changed
         else:
             if not name:
                 return False
-            _cache[pk] = {
+            entry = {
                 'public_key': pk,
                 'name': name,
                 'first_seen': now,
                 'last_seen': now,
                 'source': source,
             }
+            if lat != 0.0 or lon != 0.0:
+                entry['lat'] = lat
+                entry['lon'] = lon
+            if type_label:
+                entry['type_label'] = type_label
+            _cache[pk] = entry
             return True
 
 
@@ -135,7 +154,7 @@ def get_all_names() -> list:
 
 def parse_advert_payload(pkt_payload_hex: str):
     """
-    Parse advert pkt_payload to extract public_key and node_name.
+    Parse advert pkt_payload to extract public_key, node_name, and GPS coordinates.
 
     Layout of pkt_payload (byte offsets):
       [0:32]   Public Key (32 bytes = 64 hex chars)
@@ -146,12 +165,12 @@ def parse_advert_payload(pkt_payload_hex: str):
                If Name (bit 7): Node name (UTF-8, variable length)
 
     Returns:
-        (public_key_hex, node_name) or (None, None) on failure
+        (public_key_hex, node_name, lat, lon) or (None, None, 0, 0) on failure
     """
     try:
         raw = bytes.fromhex(pkt_payload_hex)
         if len(raw) < 101:
-            return None, None
+            return None, None, 0.0, 0.0
 
         public_key = pkt_payload_hex[:64].lower()
         app_flags = raw[100]
@@ -159,22 +178,26 @@ def parse_advert_payload(pkt_payload_hex: str):
         has_location = bool(app_flags & 0x10)  # bit 4
         has_name = bool(app_flags & 0x80)      # bit 7
 
-        if not has_name:
-            return public_key, None
-
+        lat, lon = 0.0, 0.0
         name_offset = 101
+
         if has_location:
-            name_offset += 8  # lat(4) + lon(4)
+            if len(raw) >= 109:
+                lat, lon = struct.unpack('<ff', raw[101:109])
+            name_offset += 8
+
+        if not has_name:
+            return public_key, None, lat, lon
 
         if name_offset >= len(raw):
-            return public_key, None
+            return public_key, None, lat, lon
 
         name_bytes = raw[name_offset:]
         node_name = name_bytes.decode('utf-8', errors='replace').rstrip('\x00')
 
-        return public_key, node_name if node_name else None
+        return public_key, node_name if node_name else None, lat, lon
     except Exception:
-        return None, None
+        return None, None, 0.0, 0.0
 
 
 def scan_new_adverts() -> int:
@@ -201,9 +224,9 @@ def scan_new_adverts() -> int:
                     pkt_payload = advert.get('pkt_payload', '')
                     if not pkt_payload:
                         continue
-                    pk, name = parse_advert_payload(pkt_payload)
+                    pk, name, lat, lon = parse_advert_payload(pkt_payload)
                     if pk and name:
-                        if upsert_contact(pk, name, source="advert"):
+                        if upsert_contact(pk, name, source="advert", lat=lat, lon=lon):
                             updated += 1
                 except json.JSONDecodeError:
                     continue
@@ -218,18 +241,24 @@ def scan_new_adverts() -> int:
     return updated
 
 
+_TYPE_LABELS = {1: 'CLI', 2: 'REP', 3: 'ROOM', 4: 'SENS'}
+
+
 def initialize_from_device(contacts_detailed: dict):
     """
     Seed cache from /api/contacts/detailed response dict.
     Called once at startup if cache file doesn't exist.
 
     Args:
-        contacts_detailed: dict of {public_key: {adv_name, type, ...}} from meshcli
+        contacts_detailed: dict of {public_key: {adv_name, type, adv_lat, adv_lon, ...}} from meshcli
     """
     added = 0
     for pk, details in contacts_detailed.items():
         name = details.get('adv_name', '')
-        if upsert_contact(pk, name, source="device"):
+        lat = details.get('adv_lat', 0.0) or 0.0
+        lon = details.get('adv_lon', 0.0) or 0.0
+        type_label = _TYPE_LABELS.get(details.get('type'), '')
+        if upsert_contact(pk, name, source="device", lat=lat, lon=lon, type_label=type_label):
             added += 1
 
     if added > 0:

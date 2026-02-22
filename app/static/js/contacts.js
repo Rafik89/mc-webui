@@ -1651,7 +1651,9 @@ async function loadExistingContacts() {
                     name: c.name || 'Unknown',
                     public_key: c.public_key,
                     public_key_prefix: c.public_key_prefix || c.public_key.substring(0, 12),
-                    type_label: '',
+                    type_label: c.type_label || '',
+                    adv_lat: c.lat || 0,
+                    adv_lon: c.lon || 0,
                     last_seen: c.last_seen || 0,
                     on_device: false,
                     source: c.source || 'cache'
@@ -1693,7 +1695,7 @@ function updateCounter(count, limit, totalKnown) {
 
     let text = `${count} / ${limit}`;
     if (totalKnown && totalKnown > count) {
-        text += ` (${totalKnown} known)`;
+        text += ` (${totalKnown} cached)`;
     }
     counterEl.textContent = text;
     counterEl.style.display = 'inline-block';
@@ -1917,40 +1919,27 @@ function createExistingContactCard(contact, index) {
         nameDiv.appendChild(lockIndicator);
     }
 
-    // Type badge (or "Cache only" badge for non-device contacts)
-    if (contact.on_device === false) {
-        const cacheBadge = document.createElement('span');
-        cacheBadge.className = 'badge type-badge bg-secondary';
-        cacheBadge.textContent = 'Cache';
-        cacheBadge.title = 'Not on device - known from adverts';
-        infoRow.appendChild(nameDiv);
-        infoRow.appendChild(cacheBadge);
-    } else {
-        const typeBadge = document.createElement('span');
-        typeBadge.className = 'badge type-badge';
+    // Type badge - use type_label if available, fall back to "Cache" for unknown type
+    const typeBadge = document.createElement('span');
+    typeBadge.className = 'badge type-badge';
+
+    if (contact.type_label) {
         typeBadge.textContent = contact.type_label;
-
-        // Color-code by type
         switch (contact.type_label) {
-            case 'CLI':
-                typeBadge.classList.add('bg-primary');
-                break;
-            case 'REP':
-                typeBadge.classList.add('bg-success');
-                break;
-            case 'ROOM':
-                typeBadge.classList.add('bg-info');
-                break;
-            case 'SENS':
-                typeBadge.classList.add('bg-warning');
-                break;
-            default:
-                typeBadge.classList.add('bg-secondary');
+            case 'CLI': typeBadge.classList.add('bg-primary'); break;
+            case 'REP': typeBadge.classList.add('bg-success'); break;
+            case 'ROOM': typeBadge.classList.add('bg-info'); break;
+            case 'SENS': typeBadge.classList.add('bg-warning'); break;
+            default: typeBadge.classList.add('bg-secondary');
         }
-
-        infoRow.appendChild(nameDiv);
-        infoRow.appendChild(typeBadge);
+    } else {
+        typeBadge.textContent = 'Cache';
+        typeBadge.classList.add('bg-secondary');
+        typeBadge.title = 'Not on device - type unknown';
     }
+
+    infoRow.appendChild(nameDiv);
+    infoRow.appendChild(typeBadge);
 
     // Public key row (clickable to copy)
     const keyDiv = document.createElement('div');
@@ -1999,21 +1988,21 @@ function createExistingContactCard(contact, index) {
         pathDiv.textContent = `Path: ${contact.path_or_mode}`;
     }
 
-    // Action buttons (only for device contacts)
+    // Action buttons
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'd-flex gap-2 mt-2';
 
-    if (contact.on_device !== false) {
-        // Map button (only if GPS coordinates available)
-        if (contact.adv_lat && contact.adv_lon && (contact.adv_lat !== 0 || contact.adv_lon !== 0)) {
-            const mapBtn = document.createElement('button');
-            mapBtn.className = 'btn btn-sm btn-outline-primary';
-            mapBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Map';
-            mapBtn.onclick = () => window.showContactOnMap(contact.name, contact.adv_lat, contact.adv_lon);
-            actionsDiv.appendChild(mapBtn);
-        }
+    // Map button - for ANY contact with GPS coordinates
+    if (contact.adv_lat && contact.adv_lon && (contact.adv_lat !== 0 || contact.adv_lon !== 0)) {
+        const mapBtn = document.createElement('button');
+        mapBtn.className = 'btn btn-sm btn-outline-primary';
+        mapBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Map';
+        mapBtn.onclick = () => window.showContactOnMap(contact.name, contact.adv_lat, contact.adv_lon);
+        actionsDiv.appendChild(mapBtn);
+    }
 
-        // Protect button
+    // Protect & Delete buttons (only for device contacts)
+    if (contact.on_device !== false) {
         const protectBtn = document.createElement('button');
         protectBtn.className = isProtected ? 'btn btn-sm btn-warning' : 'btn btn-sm btn-outline-warning';
         protectBtn.innerHTML = isProtected
@@ -2022,7 +2011,6 @@ function createExistingContactCard(contact, index) {
         protectBtn.onclick = () => toggleContactProtection(contact.public_key, protectBtn);
         actionsDiv.appendChild(protectBtn);
 
-        // Delete button (disabled if protected)
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn btn-sm btn-outline-danger';
         deleteBtn.innerHTML = '<i class="bi bi-trash"></i> Delete';
@@ -2031,7 +2019,6 @@ function createExistingContactCard(contact, index) {
         if (isProtected) {
             deleteBtn.title = 'Cannot delete protected contact';
         }
-
         actionsDiv.appendChild(deleteBtn);
     }
 
