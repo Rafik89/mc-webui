@@ -188,6 +188,11 @@ class MeshCLISession:
         self.acks_file = new_acks
         logger.info(f"Log paths updated for device: {new_name}")
 
+        # Reload echo and ACK data from the correct files
+        # (initial _load_echoes/_load_acks may have failed with the "auto" name)
+        self._load_echoes()
+        self._load_acks()
+
     def _start_session(self):
         """Start meshcli process and worker threads"""
         logger.info(f"Starting meshcli session on {self.serial_port}")
