@@ -162,7 +162,7 @@ def parse_advert_payload(pkt_payload_hex: str):
       [32:36]  Timestamp (4 bytes)
       [36:100] Signature (64 bytes)
       [100]    App Flags (1 byte) - bit 4: Location, bit 7: Name
-      [101+]   If Location (bit 4): Lat (4 bytes) + Lon (4 bytes)
+      [101+]   If Location (bit 4): Lat (4 bytes, LE int32/1e6) + Lon (4 bytes, LE int32/1e6)
                If Name (bit 7): Node name (UTF-8, variable length)
 
     Returns:
@@ -184,7 +184,8 @@ def parse_advert_payload(pkt_payload_hex: str):
 
         if has_location:
             if len(raw) >= 109:
-                lat, lon = struct.unpack('<ff', raw[101:109])
+                lat_i, lon_i = struct.unpack('<ii', raw[101:109])
+                lat, lon = lat_i / 1e6, lon_i / 1e6
                 # Validate: discard NaN, Infinity, and out-of-range values
                 if (math.isnan(lat) or math.isnan(lon) or
                         math.isinf(lat) or math.isinf(lon) or
