@@ -98,6 +98,7 @@ Environment=CHECK_INTERVAL=30
 Environment=LOG_FILE=${LOG_FILE}
 Environment=HTTP_PORT=5051
 Environment=AUTO_START=true
+Environment=USB_DEVICE_PATH=${USB_DEVICE_PATH}
 ExecStart=/usr/bin/python3 -u ${SCRIPT_DIR}/watchdog.py
 Restart=always
 RestartSec=10
@@ -144,6 +145,7 @@ echo "Features:"
 echo "  - Checks container health every 30 seconds"
 echo "  - Automatically restarts unhealthy containers"
 echo "  - Saves diagnostic logs before restart"
+echo "  - Performs hardware USB bus reset if LoRa device is stuck"
 echo ""
 echo "Useful commands:"
 echo "  systemctl status $SERVICE_NAME        # Check service status"

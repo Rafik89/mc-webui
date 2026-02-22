@@ -26,6 +26,7 @@ import json
 import subprocess
 import threading
 import time
+import fcntl
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -57,6 +58,107 @@ def log(message: str, level: str = 'INFO'):
             f.write(line + '\n')
     except Exception as e:
         print(f"[{timestamp}] [ERROR] Failed to write to log file: {e}")
+
+
+# USB Device Reset Constant
+USBDEVFS_RESET = 21780 # 0x5514
+
+def auto_detect_usb_device() -> str:
+    """Attempt to auto-detect the physical USB device path (e.g., /dev/bus/usb/001/002) for LoRa."""
+    env_file = os.path.join(MCWEBUI_DIR, '.env')
+    serial_port = 'auto'
+    
+    if os.path.exists(env_file):
+        try:
+            with open(env_file, 'r') as f:
+                for line in f:
+                    if line.startswith('MC_SERIAL_PORT='):
+                        serial_port = line.split('=', 1)[1].strip().strip('"\'')
+                        break
+        except Exception as e:
+            log(f"Failed to read .env file for serial port: {e}", "WARN")
+
+    if serial_port.lower() == 'auto':
+        by_id_path = Path('/dev/serial/by-id')
+        if by_id_path.exists():
+            devices = list(by_id_path.iterdir())
+            if len(devices) == 1:
+                serial_port = str(devices[0])
+            elif len(devices) > 1:
+                log("Multiple serial devices found, cannot auto-detect USB device for reset", "WARN")
+                return None
+            else:
+                log("No serial devices found in /dev/serial/by-id", "WARN")
+                return None
+        else:
+            log("/dev/serial/by-id does not exist", "WARN")
+            return None
+
+    if not serial_port or not os.path.exists(serial_port):
+        log(f"Serial port {serial_port} not found", "WARN")
+        return None
+
+    try:
+        # Resolve symlink to get actual tty device (e.g., /dev/ttyACM0)
+        real_tty = os.path.realpath(serial_port)
+        tty_name = os.path.basename(real_tty)
+
+        # Find USB bus and dev number via sysfs
+        sysfs_path = f"/sys/class/tty/{tty_name}/device"
+        if not os.path.exists(sysfs_path):
+            log(f"Sysfs path {sysfs_path} not found", "WARN")
+            return None
+
+        usb_dev_dir = os.path.dirname(os.path.realpath(sysfs_path))
+        busnum_file = os.path.join(usb_dev_dir, "busnum")
+        devnum_file = os.path.join(usb_dev_dir, "devnum")
+
+        if os.path.exists(busnum_file) and os.path.exists(devnum_file):
+            with open(busnum_file) as f:
+                busnum = int(f.read().strip())
+            with open(devnum_file) as f:
+                devnum = int(f.read().strip())
+            return f"/dev/bus/usb/{busnum:03d}/{devnum:03d}"
+            
+        log("Could not find busnum/devnum files in sysfs", "WARN")
+        return None
+    except Exception as e:
+        log(f"Error during USB device auto-detection: {e}", "ERROR")
+        return None
+
+def reset_usb_device():
+    """Perform a hardware USB bus reset on the LoRa device."""
+    device_path = os.environ.get('USB_DEVICE_PATH')
+    if not device_path:
+        device_path = auto_detect_usb_device()
+
+    if not device_path:
+        log("Cannot perform USB reset: device path could not be determined", "WARN")
+        return False
+
+    log(f"Performing hardware USB bus reset on {device_path}", "WARN")
+    try:
+        with open(device_path, 'w') as fd:
+            fcntl.ioctl(fd, USBDEVFS_RESET, 0)
+        log("USB bus reset successful", "INFO")
+        return True
+    except Exception as e:
+        log(f"USB reset failed: {e}", "ERROR")
+        return False
+
+def count_recent_restarts(container_name: str, minutes: int = 8) -> int:
+    """Count how many times a container was restarted in the last N minutes due to unhealthiness."""
+    cutoff_time = time.time() - (minutes * 60)
+    count = 0
+    for entry in restart_history:
+        if entry.get('container') == container_name and 'restart_success' in entry:
+            try:
+                dt = datetime.fromisoformat(entry['timestamp'])
+                if dt.timestamp() >= cutoff_time:
+                    count += 1
+            except ValueError:
+                pass
+    return count
 
 
 def run_docker_command(args: list, timeout: int = 30) -> tuple:
@@ -215,6 +317,14 @@ def handle_unhealthy_container(container_name: str, status: dict):
         log(f"Diagnostic info saved to: {diag_file}")
     except Exception as e:
         log(f"Failed to save diagnostic info: {e}", 'ERROR')
+
+    # Check if we should do a USB reset for meshcore-bridge
+    if container_name == 'meshcore-bridge':
+        recent_restarts = count_recent_restarts(container_name, minutes=8)
+        if recent_restarts >= 3:
+            log(f"{container_name} has been restarted {recent_restarts} times in the last 8 minutes. Attempting hardware USB reset.", "WARN")
+            if reset_usb_device():
+                time.sleep(2)  # Give OS time to re-enumerate the device before Docker brings it back
 
     # Restart the container
     restart_success = restart_container(container_name)

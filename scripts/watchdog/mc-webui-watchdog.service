@@ -11,6 +11,7 @@ Environment=MCWEBUI_DIR=/home/marek/mc-webui
 Environment=CHECK_INTERVAL=30
 Environment=LOG_FILE=/var/log/mc-webui-watchdog.log
 Environment=HTTP_PORT=5051
+Environment=USB_DEVICE_PATH=
 ExecStart=/usr/bin/python3 -u /home/marek/mc-webui/scripts/watchdog/watchdog.py
 Restart=always
 RestartSec=10

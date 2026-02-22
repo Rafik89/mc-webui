@@ -7,6 +7,7 @@ The Container Watchdog is a systemd service that monitors Docker containers and 
 - **Health monitoring** - Checks container status every 30 seconds
 - **Automatic restart** - Restarts containers that become unhealthy
 - **Auto-start stopped containers** - Starts containers that have stopped (configurable)
+- **Hardware USB reset** - Performs a low-level USB bus reset if the LoRa device freezes (detected after 3 failed container restarts within 8 minutes)
 - **Diagnostic logging** - Captures container logs before restart for troubleshooting
 - **HTTP status endpoint** - Query container status via HTTP API
 - **Restart history** - Tracks all automatic restarts with timestamps
@@ -82,6 +83,7 @@ If you need to customize the behavior, the service supports these environment va
 | `LOG_FILE` | `/var/log/mc-webui-watchdog.log` | Path to log file |
 | `HTTP_PORT` | `5051` | HTTP status port (0 to disable) |
 | `AUTO_START` | `true` | Start stopped containers (set to `false` to disable) |
+| `USB_DEVICE_PATH` | *(auto-detected)* | Path to the LoRa device (e.g., `/dev/bus/usb/001/002`) for hardware USB bus reset |
 
 To modify defaults, create an override file:
 ```bash
