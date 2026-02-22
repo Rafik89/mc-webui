@@ -612,8 +612,8 @@ class MeshCLISession:
                 'channel_idx': channel_idx,
                 'pkt_payload': None
             }
-            # Cleanup old echo counts (> 1 hour)
-            cutoff = time.time() - 3600
+            # Cleanup old echo counts (> 7 days, matching .echoes.jsonl retention)
+            cutoff = time.time() - (7 * 24 * 3600)
             self.echo_counts = {k: v for k, v in self.echo_counts.items()
                                if v['timestamp'] > cutoff}
             logger.debug(f"Registered pending echo for channel {channel_idx}")
